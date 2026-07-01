@@ -16,6 +16,10 @@ name: Publish Python package to PyPI
 
 on:
   workflow_call:
+    secrets:
+      PYPI_PUBLISH_TOKEN:
+        required: true
+        description: "API token for authenticating and publishing to PyPI"
 
 jobs:
   build:
@@ -41,9 +45,6 @@ jobs:
     name: Publish package
     needs: build
     runs-on: ubuntu-24.04
-    environment: pypi
-    permissions:
-      id-token: write
     steps:
       - name: Download dist artifacts
         uses: actions/download-artifact@v4
@@ -51,5 +52,10 @@ jobs:
           name: dist
           path: dist/
 
+      - name: Install uv
+        run: sudo snap install astral-uv --classic
+
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_PUBLISH_TOKEN }}
+        run: uv publish
