@@ -163,18 +163,18 @@ variable "repository" {
   description = "List of Charmed HPC repositories to apply labels to"
   type        = set(string)
   default = [
-    ".github",
     "apptainer-operator",
     "charmed-hpc-benchmarks",
+    "charmed-hpc-docs",
+    "charmed-hpc-libs",
     "charmed-hpc-terraform",
-    "docs",
-    "hpc-libs",
     "filesystem-charms",
+    "hpc-specs",
+    "hpc-team",
     "ondemand-snap",
     "slurm-charms",
     "slurm-snap",
     "slurmutils",
-    "specs",
     "sssd-operator",
   ]
 }

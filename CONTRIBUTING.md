@@ -4,21 +4,27 @@ Do you want to contribute to Charmed HPC? You've come to
 the right place then! __Here is how you can get involved.__
 
 Please take a moment to review this document so that the contribution
-process will be easy and effective for everyone. Following these guidelines helps you communicate that you respect the maintainers and contributors developing Charmed HPC. In return, they will reciprocate that respect
-while addressing your issue or assessing your submitted changes and/or features.
+process will be easy and effective for everyone. Following these guidelines indicates
+that you respect the maintainers and contributors developing Charmed HPC. In return, they will
+reciprocate that respect while addressing your issue or assessing your submitted changes
+and/or features.
 
 Have any questions? Feel free to ask them in the [Ubuntu High-Performance Computing
-Matrix chat](https://matrix.to/#/#hpc:ubuntu.com).
+Matrix chat](https://matrix.to/#/#hpc:ubuntu.com) or in the [High-Performance Computing
+category on the Ubuntu Discourse](https://discourse.ubuntu.com/c/project/hpc/151).
+
+The full list of Charmed HPC repositories can be found by filtering the Canonical GitHub
+organization by the [`charmed-hpc` topic](https://github.com/search?q=topic%3Acharmed-hpc%20org%3Acanonical&amp;type=repositories)
 
 ### Table of Contents
- 
+
 * [Using the issue tracker](#using-the-issue-tracker)
-* [Issues and Labels](#issues-and-labels)
 * [Bug Reports](#bug-reports)
+* [Security Reports](#security-reports)
 * [Enhancement Proposals](#enhancement-proposals)
-* [Discussions](#discussions)
 * [Guidelines and Resources](#guidelines-and-resources)
 * [Pull Requests](#pull-requests)
+* [Discussions](#discussions)
 
 ## Using the issue tracker
 
@@ -26,7 +32,8 @@ The issue trackers are the preferred way for tracking [bug reports](#bug-reports
 and [submitted pull requests](#pull-requests), but please follow these guidelines:
 
 * Please __do not__ use the issue tracker for personal issues and/or support requests.
-The [Discussions](#discussions) page is a better place to get help for personal support requests.
+The High-Performance Computing category on the Ubuntu Discourse is a better place to get help with personal
+support requests. See the [Discussions section](#discussions) below for further information.
 
 * Please __do not__ derail or troll issues. Keep the discussion on track and have respect for the other
 users/contributors.
@@ -42,7 +49,8 @@ submit a new issue or browse through previous issues.
   * The maintainers reserve the right to delete issues
   that violate this rule.
 
-* If you are unsure which repository's issue tracker an issue should be raised in, please reach out to the team on [Matrix](https://matrix.to/#/#hpc:ubuntu.com) or the [Charmed HPC Discussions page](https://github.com/orgs/charmed-hpc/discussions) to ask for help.
+* If you are unsure which repository's issue tracker an issue should be raised in, please reach out to the
+team on Matrix or on the Ubuntu Discourse to ask for help.
 
 The Charmed HPC project's issue trackers use different labels to help organize and identify issues.
 Here is a list of some of the labels the project uses, and how the maintainers use them:
@@ -62,7 +70,7 @@ Here is a list of some of the labels the project uses, and how the maintainers u
 * `good first issue` - Issues that may be a good fit for project newcomers looking to contribute.
 
 For a look at the complete set of labels used by the Charmed HPC project, see the
-[slurm-charm labels page](https://github.com/charmed-hpc/slurm-charms/labels).
+[`slurm-charms` labels page](https://github.com/canonical/slurm-charms/labels).
 
 ## Bug Reports
 
@@ -87,30 +95,44 @@ Some common questions you should answer in your report include:
 * Which commands/actions/configuration options/etc produce the issue?
 * What was your expected outcome?
 
-Please try to be as detailed as possible in your report. Detailed, comprehensive bug reports help the mainters quickly fix issues. 
+Please be as detailed as possible in your report. Detailed, comprehensive bug reports help the maintainers
+quickly fix issues.
+
+## Security Reports
+
+See the [SECURITY.md](./SECURITY.md) file for further information on how to report security issues and
+vulnerabilities in Charmed HPC.
 
 ## Enhancement Proposals
 
-Charmed HPC's maintainers may already know what they want to add to Charmed HPC, but they are always open to new ideas and potentioal improvements. GitHub Discussions is a good place for discussing open-ended questions that pertain to the entire Charmed HPC project, but more focused enhancement proposal discussions can start within an issue tracker.
+Charmed HPC project's maintainers are always open to new ideas
+and potential improvements. The [Ubuntu High-Performance Computing Matrix chat](https://matrix.to/#/#hpc:ubuntu.com)
+and the [High-Performance Computing category on the Ubuntu Discourse](https://discourse.ubuntu.com/c/project/hpc/151)
+are good places for discussing open-ended questions that pertain to the entire
+Charmed HPC project, but more focused enhancement proposal discussions can start
+in an issue tracker.
 
 Please note that not all proposals may be incorporated into Charmed HPC. Also, please
-know that spamming the maintainers to incorporate something you want will not improve the likelihood of being implemented; it may result in you receiving a temporary ban.
+know that spamming the maintainers to incorporate something you want will not improve the
+likelihood of being implemented; it may result in you receiving a temporary ban.
 
 ## Guidelines and Resources
 
-The following guidelines should be followed if you are writing code to be merged into any of the respositories within the Charmed HPC GitHub organization. Some repositories will have additional guidelines; please read the corresponding CONTRIBUTING.md within the repository of interest.
+The following guidelines should be followed if you are writing code to be merged
+into any of the Charmed HPC project repositories. Some repositories will have additional
+guidelines; please read the corresponding CONTRIBUTING.md within the repository of interest.
 
 ### Documentation
 
-* Any code contribution should be accompanied by a correspsonding documentation contribution to [Charmed HPC's documentation](https://github.com/charmed-hpc/docs), following the [documentation CONTRIBUTING.md guide](https://github.com/charmed-hpc/docs/blob/main/CONTRIBUTING.md).
-  * If the code contribution does not require a documentation addition or change, please provide justification in the Pull Request.
+* Any code contribution should be accompanied by a corresponding documentation contribution to [Charmed HPC's documentation](https://github.com/canonical/charmed-hpc-docs), following the [documentation CONTRIBUTING.md guide](https://github.com/canonical/charmed-hpc-docs/blob/main/CONTRIBUTING.md).
+  * If the code contribution does not require a documentation addition or change, please provide justification in the Pull Request description.
 
-### Conventional Commits 
+### Conventional Commits
 
-* Follow [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/) 
-  
+* Follow [conventional commits](https://www.conventionalcommits.org/en/v1.0.0/)
+
 * Make sure the commits pass the repository's configured [`commitlint`](https://commitlint.js.org/) checks.
-  
+
 * You can use Git's
    [interactive rebase](https://help.github.com/articles/about-git-rebase/) feature to
    tidy up your commits.
@@ -120,9 +142,9 @@ The following guidelines should be followed if you are writing code to be merged
 
 To have your Python code contributions accepted into Charmed HPC, you must:
 
-* Follow to the Python code style guidelines outlined in [Python Enhancement Proposal 8](https://pep8.org/).
+* Follow the Python code style guidelines outlined in [Python Enhancement Proposal 8](https://pep8.org/).
 
-* Have all classes, functions, and methods include a docstring that documents their functionality. 
+* All classes, functions, and methods include a docstring that documents their functionality.
   * *Docstrings must follow the
   [Google docstring format](https://github.com/google/styleguide/blob/gh-pages/pyguide.md#38-comments-and-docstrings)*.
 
@@ -130,31 +152,31 @@ To have your Python code contributions accepted into Charmed HPC, you must:
 
 * Pass all lint and static type checks.
 
-* Pass all of the repository's existing unit and integration tests.
+* Pass all the repository's existing unit and integration tests.
 
 * Add appropriate tests which prove the correctness of your contributions.
 
 If you are contributing to one of the charmed operators used in Charmed HPC, you must also:
 
-* Follow to the operator development best practices outlined in the [operator development styleguide](https://juju.is/docs/sdk/styleguide).
+* Follow the operator development best practices outlined in the [How to write and structure charm code](https://canonical.com/juju/docs/ops/latest/howto/write-and-structure-charm-code/) documentation.
 
+### Useful Resources
 
-### Useful Resources 
+The following list provides a variety of resources of relevance to Charmed HPC that may be worth skimming
+prior to making a contribution.
 
-The following list provides a variety of resources of revelance to Charmed HPC that may be worth skimming prior to making a contribution.
-
--  [Charmed HPC documentation](https://canonical-charmed-hpc.readthedocs-hosted.com/latest/)
--  [Juju documentation](https://documentation.ubuntu.com/juju)
--  [Charmcraft documentation](https://canonical-charmcraft.readthedocs-hosted.com/stable/)
--  [Ops framework documentation](https://ops.readthedocs.io/en/latest/) for Juju
--  [Terraform/OpenTofu Provider for Juju documentation](https://canonical-terraform-provider-juju.readthedocs-hosted.com/en/latest/)
+-  [Charmed HPC documentation](https://ubuntu.com/hpc/docs)
+-  [Juju documentation](https://canonical.com/juju/docs/juju-cli)
+-  [Charmcraft documentation](https://documentation.ubuntu.com/charmcraft)
+-  [Ops framework documentation](https://canonical.com/juju/docs/ops) for Juju
+-  [Terraform/OpenTofu Provider for Juju documentation](https://canonical.com/juju/docs/terraform-provider-juju)
 -  [OpenTofu documentation](https://opentofu.org/docs/)
 -  [Slurm workload manager documentation](https://slurm.schedmd.com/documentation.html)
 
 ## Pull Requests
 
 Good pull requests &mdash; patches, improvements, new features &mdash;
-are a huge help. 
+are a huge help.
 
 __Ask first__ before embarking on any __significant__ pull request such as
 implementing new features, refactoring methods, or incorporating new libraries;
@@ -196,7 +218,7 @@ Adhering to the following process is the best way to get your contribution accep
 4. Ensure that your changes pass all tests.
 
    The tests may differ for different repositories. See the corresponding repository's CONTRIBUTING.md file
-    for details on the appropriate tests. 
+    for details on the appropriate tests.
 
 
 5. Sign and commit and your changes in logical chunks to your topic branch, using [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
@@ -219,11 +241,12 @@ Adhering to the following process is the best way to get your contribution accep
 8. [Open a Pull Request](https://help.github.com/articles/about-pull-requests/)
    with a clear title and description against the `main` branch. Your pull request should also be focused and not contain commits that are not related to what you are contributing.
 
-9. Conditionally, open a corresponding Pull Request on the [`docs`](https://github.com/charmed-hpc/docs) repository, following the [charmed-hpc/docs CONTRIBUTING.md guidelines](https://github.com/charmed-hpc/docs/blob/main/CONTRIBUTING.md#pull-requests-and-contributing-process), if you are making user-facing changes.
+9. Conditionally, open a corresponding Pull Request on the [`charmed-hpc-docs`](https://github.com/canonical/charmed-hpc-docs) repository, following the [canonical/charmed-hpc-docs CONTRIBUTING.md guidelines](https://github.com/canonical/charmed-hpc-docs/blob/main/CONTRIBUTING.md#pull-requests-and-contributing-process), if you are making user-facing changes.
 
 ## Discussions
 
-GitHub Discussions is a great place to connect with other Charmed HPC users to
-discuss potential enhancements, ask questions, and resolve issues. Charmed HPC users
-should remain respectful of each other. Discussion moderators reserve the right to
-suspend discussions and/or delete posts that do not follow this rule.
+The [High-Performance Computing category on the Ubuntu Discourse](https://discourse.ubuntu.com/c/project/hpc/151)
+is a great place to connect with other Charmed HPC users to discuss potential enhancements,
+ask questions, and resolve issues. Commentators must remain respectful of each other.
+The Ubuntu Discourse moderation team reserve the right to suspend discussions and/or delete
+posts that do not follow this rule.

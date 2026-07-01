@@ -1,35 +1,22 @@
 # `labels` Terraform plan
 
-This is a Terraform plan for managing labels in the Charmed HPC GitHub organization using the
+This is a Terraform plan for managing labels in Charmed HPC GitHub repositories using the
 GitHub Terraform provider. For more information, refer to the
 [documentation](https://registry.terraform.io/providers/integrations/github/latest/docs)
 for the GitHub Terraform provider.
 
 ## Requirements
 
-This plan requires that you have a GitHub Personal Access Token (PAT) that grants organization-wide
+This plan requires that you have a GitHub Personal Access Token (PAT) that grants
 permissions to edit issue and pull request labels. Refer to the [usage](#usage) section for more details.
 
-## Managed organization repositories
+## Managed repositories
 
-Below is the list of Charmed HPC organization repositories whose labels are managed by the
-`labels` Terraform plan:
+For the list of Charmed HPC repositories whose labels are managed by the `labels` Terraform plan, refer
+to the `repository` variable in [_variables.tf_](./variables.tf). To add a new repository to the `labels`
+plan, add the repository's name to this variable.
 
-* .github
-* apptainer-operator
-* charmed-hpc-benchmarks
-* charmed-hpc-terraform
-* docs
-* hpc-libs
-* slurm-charms
-* slurm-snap
-* slurmutils
-* filesystem-charms
-* ondemand-snap
-
-To add a new repository to the `labels` plan, add the repository's name
-to the default set declared by the `repository` variable in [_variables.tf_](./variables.tf). Note
-that the `labels` plan will fail with the 422 HTTP error code if the newly added repository already
+Note that the `labels` plan will fail with the 422 HTTP error code if the newly added repository already
 has a label with the same name as a label defined in the plan.
 
 ## Created labels
@@ -64,19 +51,18 @@ has a label with the same name as a label defined in the plan.
 
 ## Usage
 
-To add the labels to the organization repositories, first generate a Personal Access Token (PAT) with permission
+To add the labels to the repositories, first generate a Personal Access Token (PAT) with permission
 to edit Issue/Pull Request labels. You can generate a PAT by navigating in GitHub to Settings > Developer
 settings > Personal access tokens > Fine-grained tokens and then select ___Generate new token___.
 
-From the ___Generate new token___ page, provide a token name and then set the `charmed-hpc` GitHub organization
+From the ___Generate new token___ page, provide a token name and then set the `canonical` GitHub organization
 as the resource owner:
 
-![Resource owner dropdown on Generate new token page with the `charmed-hpc` GitHub organization set as the owner](../../.github/images/resource-owner.png)
+![Resource owner dropdown on Generate new token page with the `canonical` GitHub organization set as the owner](../../.github/images/resource-owner.png)
 
-After setting `charmed-hpc` as the resource owner, now set the repository access
-to all repositories:
+Then set access for each repository to be managed by the `labels` Terraform plan:
 
-!["All repositories" radio button selected for repository access permission level](../../.github/images/repository-access-all-repositories.png)
+!["Only select repositories" radio button selected for repository access permission level with "hpc-team" as example repository](../../.github/images/repository-access.png)
 
 Now set the repository permissions for _Issues_ to __Read and write__:
 

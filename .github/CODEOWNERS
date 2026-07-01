@@ -1,1 +1,6 @@
-** @charmed-hpc/terraform-reviewers
+**                      @canonical/hpc
+
+*/workflows             @canonical/hpc-code-reviewers
+**/terraform            @canonical/hpc-code-reviewers
+**/scripts              @canonical/hpc-code-reviewers
+**/ssdlc-manifests      @canonical/hpc-code-reviewers

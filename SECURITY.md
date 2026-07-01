@@ -2,9 +2,13 @@
 
 ## Supported versions
 
-Security updates will be released after vulnerabilities have been identified and fixed. The project as a whole has no
-major version releases, but every individual repository may have a list of supported versions for certain components.
-Read the `SECURITY.md` file on every repository for more information about the supported versions of every component.
+The Charmed HPC project is a collection of multiple artifacts that are managed in separate git
+repositories. Each artifact has an actively supported version.
+
+Read the SECURITY.md file in each artifact repository for more information on how report
+a vulnerability for that particular artifact. The Charmed HPC core development team will
+release security updates for the affected artifacts after vulnerabilities have been
+identified and fixed.
 
 ## Reporting a vulnerability
 

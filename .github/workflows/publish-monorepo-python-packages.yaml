@@ -16,6 +16,10 @@ name: Publish monorepo Python packages
 
 on:
   workflow_call:
+    secrets:
+      PYPI_PUBLISH_TOKEN:
+        required: true
+        description: "API token for authenticating and publishing to PyPI"
 
 jobs:
   get-packages:
@@ -85,10 +89,6 @@ jobs:
     strategy:
       matrix:
         package: ${{ fromJSON(needs.get-packages.outputs.packages) }}
-    permissions:
-      id-token: write
-    environment:
-      name: pypi
     steps:
       - name: Download dist artifacts
         uses: actions/download-artifact@v4
@@ -96,5 +96,10 @@ jobs:
           name: dist-${{ matrix.package }}
           path: dist/
 
-      - name: Publish ${{ matrix.package }} to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Install uv
+        run: sudo snap install astral-uv --classic
+
+      - name: Publish to PyPI
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_PUBLISH_TOKEN }}
+        run: uv publish

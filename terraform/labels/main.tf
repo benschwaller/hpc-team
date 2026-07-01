@@ -13,7 +13,7 @@
 # limitations under the License.
 
 provider "github" {
-  owner = "charmed-hpc"
+  owner = "canonical"
 }
 
 data "github_issue_labels" "existing-labels" {
