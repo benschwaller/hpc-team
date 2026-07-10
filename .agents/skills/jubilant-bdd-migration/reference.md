@@ -170,6 +170,7 @@ tests/integration/
 | `juju.add_unit("app", num_units=N)` | `scenarios[i]` (steps) | `Given I add 'N' units to app 'app'` |
 | `juju.run("app/0", "action", params=...)` | `scenarios[i]` (steps) | `When I run action 'action' on unit 'app/0' [with parameters 'k=v']` |
 | `juju.exec("cmd", unit="app/0")` | `scenarios[i]` (steps) | `When I execute 'cmd' on unit 'app/0'` |
+| `juju.run(unit_A, "action")` where the action modifies state of a node on unit_B, then `juju.exec("scontrol ... node <unit_B-name>", unit=unit_A)` | `scenarios[i]` (steps) | `When I run action 'action' on unit 'unit_A' ...` + custom `Then ... unit 'unit_B' ...` (verification step references the **node owner**, not the action executor) |
 | `juju.wait(lambda s: s.apps[...].status == "active")` | `scenarios[i]` (steps) | `Then the workload status for app 'app' is 'active'` (framework polls via `context.wait()`). Do NOT put `juju.wait()` inside a custom deploy step if integrations happen in later steps — charms can't reach active without integrations. |
 | Custom status checker `def _ready(s): ...` passed to `juju.wait` | custom step | Keep as a helper, or wrap in a custom Then step that calls `context.wait(ready=...)` |
 | `tenacity.Retrying(...)` around an assertion | `scenarios[i]` (steps) | Drop tenacity; use `context.wait()` (or a built-in Then step, which already polls). The `ready` function must catch `Exception` (not just `AssertionError`) because `juju.exec()` raises `jubilant.TaskError` on non-zero exit codes. |
@@ -369,3 +370,13 @@ features**
   loop that checks for the binary (e.g.,
   `juju.exec("apptainer --version")`) before using it. This replaces
   any `sleep(N)` from the original tests.
+
+**Polling stuck / `context.wait()` times out after `set-node-state`**
+- The `Then` verification step references the unit the action ran on
+  (e.g., `controller/0`) instead of the unit whose node state changed
+  (e.g., `compute/0`). Custom steps that derive node names from unit
+  names (e.g., `unit.replace("/", "-")`) will query the wrong node, and
+  `context.wait()`'s `ready` function catches `Exception`, so the error
+  is silently retried until timeout. Check that the `Then` step's unit
+  matches the node owner, not the action executor. See the
+  `set-node-state` migration example in [examples.md](examples.md).

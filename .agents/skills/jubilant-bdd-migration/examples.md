@@ -520,3 +520,96 @@ def apptainer_oci_scheduling(context: Context, login_unit: str, compute_unit: st
     )
     # ... rest of the test
 ```
+
+## Migrating action-on-one-unit / state-on-another tests
+
+Some charm actions run on one unit but modify state belonging to a
+different unit. In Slurm, `set-node-state` runs on `slurmctld/0` (the
+controller) but changes the state of a node registered to `slurmd/0`
+(e.g. `compute-0`). The legacy test uses two distinct variables — one
+for the action executor, one for the node owner — which makes the
+distinction explicit. The YAML test plan only has a single `unit` field
+per step, so each step must consciously reference the correct unit.
+
+### Before (traditional pytest + jubilant)
+
+```python
+# tests/integration/test_charm.py
+
+@pytest.mark.order(9)
+def test_set_node_state(juju: jubilant.Juju) -> None:
+    slurmctld_unit = f"{SLURMCTLD_APP_NAME}/0"   # action executor
+    slurmd_unit = f"{SLURMD_APP_NAME}/0"          # node owner
+    name = slurmd_unit.replace("/", "-")           # → "compute-0"
+
+    # Action runs on the controller unit:
+    juju.run(
+        slurmctld_unit,
+        "set-node-state",
+        params={"nodes": name, "state": "down", "reason": "maintenance"},
+    )
+    # Verification queries the controller, but the node name comes from
+    # the compute unit:
+    result = json.loads(
+        juju.exec(f"scontrol --json show node {name}", unit=slurmctld_unit).stdout
+    )
+    assert "DOWN" in result["nodes"][0]["state"]
+    assert result["nodes"][0]["reason"] == "'maintenance'"
+
+    # Set state to 'idle'.
+    juju.run(slurmctld_unit, "set-node-state", params={"nodes": name, "state": "idle"})
+    result = json.loads(
+        juju.exec(f"scontrol --json show node {name}", unit=slurmctld_unit).stdout
+    )
+    assert "IDLE" in result["nodes"][0]["state"]
+    assert result["nodes"][0]["reason"] == ""
+```
+
+### After — correct YAML (action unit ≠ verification unit)
+
+```yaml
+feature: "Slurm node operations"
+type: functional
+status: planned
+risk: stable
+description: "Compute node state and set-node-state action verification."
+background: |-
+  Given 'controller' is deployed
+  Given 'compute' is deployed
+scenarios:
+  - |-
+    Set node state action updates node state and reason
+    When I run action 'set-node-state' on unit 'controller/0' with parameters 'nodes=compute-0 state=down reason=maintenance'
+    Then the node for unit 'compute/0' has state containing 'DOWN' and reason "'maintenance'"
+    When I run action 'set-node-state' on unit 'controller/0' with parameters 'nodes=compute-0 state=idle'
+    Then the node for unit 'compute/0' has state containing 'IDLE' and reason ""
+```
+
+Note the two unit references per scenario:
+
+- **`When`** steps say `on unit 'controller/0'` — the action lives on
+  the `slurmctld` charm.
+- **`Then`** steps say `for unit 'compute/0'` — the custom
+  `node_name(unit)` helper derives the Slurm node name from this unit
+  (`compute/0` → `compute-0`), which is the node whose state changed.
+
+### Common pitfall — same unit in both steps
+
+It is tempting to copy the action unit into the `Then` step:
+
+```yaml
+# WRONG — will silently time out
+When I run action 'set-node-state' on unit 'controller/0' with parameters 'nodes=compute-0 state=down reason=maintenance'
+Then the node for unit 'controller/0' has state containing 'DOWN' and reason "'maintenance'"
+```
+
+Here `node_name("controller/0")` → `"controller-0"`, which is not a
+registered compute node. `scontrol --json show node controller-0` either
+returns an error or unexpected data, and the custom step's
+`context.wait(ready=...)` function catches `Exception` and returns
+`False` — so the poll retries silently every second until the 3-minute
+default `context.wait()` timeout, making it appear "stuck" rather than
+failing with a clear assertion error.
+
+When the action unit and the node-owner unit differ, the `Then` step
+must reference the **node owner**, not the action executor.

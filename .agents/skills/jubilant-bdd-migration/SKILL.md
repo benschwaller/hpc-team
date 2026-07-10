@@ -63,6 +63,15 @@ structured YAML, validated against a strict schema, and transpiled into
   repo for the canonical `Context` API when authoring custom steps.
 - DO keep the original non-BDD tests in place until the BDD suite is fully
   green.
+- DO distinguish the action-executing unit from the node-owning unit when
+  migrating tests that affect a different unit's state. In Slurm,
+  `set-node-state` runs on `slurmctld/0` (the controller) but modifies the
+  state of nodes registered to `slurmd/0` / `compute/0`. The `When` step
+  references the action unit (`controller/0`); the `Then` verification step
+  must reference the node-owner unit (`compute/0`), because custom steps like
+  `node_name(unit)` derive the Slurm node name from the unit in the step
+  text. Using the action unit in the `Then` step silently queries the wrong
+  node — `context.wait()` catches the exception and polls until timeout.
 
 ## DO NOTs
 
