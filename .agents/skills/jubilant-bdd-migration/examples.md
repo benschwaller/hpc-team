@@ -1,16 +1,8 @@
 # Examples
 
-Concrete before/after migrations and custom-step templates for the
-`jubilant-bdd-migration` skill. See `SKILL.md` for the step reference and
-`reference.md` for configuration, schema, and rules.
-
-All examples follow the same pipeline:
-
-1. Author YAML test plans in `tests/integration/features/test-plan.yaml`.
-2. Run `gherkinator validate` to catch schema errors.
-3. Run `gherkinator generate --format gh` to produce `.feature` files.
-4. Write a `test_*.py` module that loads the generated scenarios.
-5. Run `pytest tests/integration/ -v`.
+Concrete before/after migrations and custom-step templates. See
+`SKILL.md` for the step reference and `reference.md` for configuration
+and schema.
 
 ## Full before/after pipeline
 
@@ -38,21 +30,7 @@ def test_deploy_and_check(juju):
 
 ### After (gherkinator-controlled BDD)
 
-**Step 1 — initialize the YAML test plan directory:**
-
-```bash
-gherkinator init tests/integration/features --name test-plan
-```
-
-This creates `tests/integration/features/test-plan.yaml`.
-
-**Step 2 — author the YAML test plan:**
-
-```bash
-gherkinator edit tests/integration/features/test-plan.yaml
-```
-
-In the editor, write the plan (final YAML below):
+YAML in `tests/integration/features/test-plan.yaml`:
 
 ```yaml
 feature: "Slurmctld deployment"
@@ -70,26 +48,7 @@ scenarios:
     Then the workload status for app 'slurmctld' is 'active'
 ```
 
-**Step 3 — validate the YAML schema:**
-
-```bash
-gherkinator validate tests/integration/features/test-plan.yaml
-```
-
-Output:
-
-```
-All 1 test plan(s) are valid.
-```
-
-**Step 4 — generate the `.feature` file:**
-
-```bash
-gherkinator generate --format gh tests/integration/features/test-plan.yaml \
-  --output-dir tests/integration/features
-```
-
-Generated `tests/integration/features/slurmctld_deployment.feature`:
+Generated `slurmctld_deployment.feature`:
 
 ```gherkin
 @functional @planned @stable
@@ -106,8 +65,6 @@ Feature: Slurmctld deployment
     Then the workload status for app 'slurmctld' is 'active'
 ```
 
-**Step 5 — load the scenarios:**
-
 `tests/integration/test_deployment.py`:
 
 ```python
@@ -116,23 +73,12 @@ from pytest_bdd import scenarios
 
 scenarios("features/slurmctld_deployment.feature")
 
-# No custom steps needed here — every step above is provided by
-# pytest-jubilant-bdd. Action results are available on the `context`
-# fixture (context.action_results) if a later scenario needs to inspect
-# them.
+# No custom steps needed — every step above is provided by
+# pytest-jubilant-bdd.
 ```
 
-**Step 6 — run the BDD suite:**
-
-```bash
-pytest tests/integration/ -v
-```
-
-**Step 7 — flip `status` to `implemented` once green:**
-
-Edit the YAML, change `status: planned` to `status: implemented`, then
-re-run `gherkinator generate` so the regenerated `.feature` carries the
-`@implemented` tag.
+After the suite is green, flip `status: planned` → `status: implemented`
+and re-run `gherkinator generate`.
 
 ## Local-charm deploy example
 
@@ -306,23 +252,7 @@ produces three `.feature` files in one shot:
 
 ## Incremental migration with `--risk` / `--status`
 
-During a multi-day migration, generate only the plans you intend to ship:
-
-```bash
-# Newly migrated (planned) and only the highest-criticality (edge) plans.
-gherkinator generate --format gh tests/integration/features/test-plan.yaml \
-  --output-dir tests/integration/features \
-  --status planned --risk edge
-
-# Bump to candidate once edge-risk plans are green; this adds beta + edge.
-gherkinator generate --format gh tests/integration/features/test-plan.yaml \
-  --output-dir tests/integration/features \
-  --status planned --risk candidate
-```
-
-After all `status: planned` plans in a risk band are green, edit each
-YAML document's `status: planned` → `status: implemented` and re-run
-without filters to regenerate the full set.
+See [reference.md](reference.md) for the risk/status filtering table.
 
 ## Removing a plan you no longer want
 
@@ -357,13 +287,9 @@ gherkinator generate --format gh tests/integration/features/test-plan.yaml \
 
 ## Custom step templates
 
-Write custom steps only for behavior the framework doesn't cover. Custom
-steps take the `context` fixture and use `context.wait()` for any polling.
-For the exact `Context` API (`get_juju`, `get_app`, `action_results` /
-`exec_results` stacks, `wait()` signatures, `assertions` namespaces),
-defer to the **`reusable-step-handler`** skill in the pytest-jubilant-bdd
-repo (`.agents/skills/reusable-step-handler/SKILL.md`). The templates
-below show the shape a custom step takes.
+Custom steps take the `context` fixture and use `context.wait()` for
+polling. See `SKILL.md` DOs for the `Exception`-catching rule and the
+`conftest.py` placement rule.
 
 ### Inspecting action / exec results
 
@@ -384,16 +310,9 @@ def assert_action_succeeded(context: Context) -> None:
 
 ### Custom status / command check with polling
 
-Prefer `context.wait()` over `tenacity`. `context.wait()` polls `ready`
-until it returns `True` three times in a row (configurable), then returns;
-it raises `TimeoutError` on timeout.
-
-**Important**: The `ready` function must catch `Exception` (not just
-`AssertionError`). `juju.exec()` raises `jubilant.TaskError` on non-zero
-exit codes — these are transient during node re-registration or service
-restarts. `tenacity.Retrying` caught all exceptions by default;
-`context.wait()` only retries when `ready` returns `False`, so any
-unhandled exception aborts the wait.
+`context.wait()` polls `ready` until it returns `True` three times in a
+row, then returns; it raises `TimeoutError` on timeout. See SKILL.md DOs
+for why `ready` must catch `Exception`.
 
 ```python
 from pytest_bdd import then, parsers
@@ -435,9 +354,7 @@ def gpu_job_submission(context: Context, login_unit: str, compute_unit: str) -> 
 ### Shared state within a scenario
 
 Use a function-scoped fixture for state that must cross step boundaries
-within a single scenario. **This fixture must live in `conftest.py`** —
-pytest does not discover fixtures from helper modules like `bdd_utils.py`
-or from `test_*_bdd.py` modules that aren't collected as test files.
+within a single scenario. This fixture must live in `conftest.py`.
 
 ```python
 import pytest
@@ -466,9 +383,6 @@ def assert_captured(scenario_state: dict, expected: str) -> None:
 
 ### Custom step shared across feature files
 
-pytest-bdd resolves step definitions only from the module where
-`scenarios()` is called, or from `conftest.py` files. A step defined in
-`test_node_operations_bdd.py` is invisible to `test_job_submission_bdd.py`.
 If a custom step is used by scenarios in multiple `.feature` files, define
 it in `conftest.py`:
 
@@ -524,78 +438,39 @@ def apptainer_oci_scheduling(context: Context, login_unit: str, compute_unit: st
 ## Migrating action-on-one-unit / state-on-another tests
 
 Some charm actions run on one unit but modify state belonging to a
-different unit. In Slurm, `set-node-state` runs on `slurmctld/0` (the
-controller) but changes the state of a node registered to `slurmd/0`
-(e.g. `compute-0`). The legacy test uses two distinct variables — one
-for the action executor, one for the node owner — which makes the
-distinction explicit. The YAML test plan only has a single `unit` field
-per step, so each step must consciously reference the correct unit.
+different unit. In Slurm, `set-node-state` runs on `slurmctld/0` but
+changes the state of a node registered to `slurmd/0` / `compute/0`.
+The legacy test uses two distinct variables; the YAML test plan has a
+single `unit` field per step, so each step must reference the correct
+unit.
 
 ### Before (traditional pytest + jubilant)
 
 ```python
-# tests/integration/test_charm.py
+slurmctld_unit = f"{SLURMCTLD_APP_NAME}/0"   # action executor
+slurmd_unit = f"{SLURMD_APP_NAME}/0"          # node owner
+name = slurmd_unit.replace("/", "-")           # → "compute-0"
 
-@pytest.mark.order(9)
-def test_set_node_state(juju: jubilant.Juju) -> None:
-    slurmctld_unit = f"{SLURMCTLD_APP_NAME}/0"   # action executor
-    slurmd_unit = f"{SLURMD_APP_NAME}/0"          # node owner
-    name = slurmd_unit.replace("/", "-")           # → "compute-0"
-
-    # Action runs on the controller unit:
-    juju.run(
-        slurmctld_unit,
-        "set-node-state",
-        params={"nodes": name, "state": "down", "reason": "maintenance"},
-    )
-    # Verification queries the controller, but the node name comes from
-    # the compute unit:
-    result = json.loads(
-        juju.exec(f"scontrol --json show node {name}", unit=slurmctld_unit).stdout
-    )
-    assert "DOWN" in result["nodes"][0]["state"]
-    assert result["nodes"][0]["reason"] == "'maintenance'"
-
-    # Set state to 'idle'.
-    juju.run(slurmctld_unit, "set-node-state", params={"nodes": name, "state": "idle"})
-    result = json.loads(
-        juju.exec(f"scontrol --json show node {name}", unit=slurmctld_unit).stdout
-    )
-    assert "IDLE" in result["nodes"][0]["state"]
-    assert result["nodes"][0]["reason"] == ""
+juju.run(slurmctld_unit, "set-node-state",
+         params={"nodes": name, "state": "down", "reason": "maintenance"})
+result = juju.exec(f"scontrol --json show node {name}", unit=slurmctld_unit)
 ```
 
 ### After — correct YAML (action unit ≠ verification unit)
 
 ```yaml
-feature: "Slurm node operations"
-type: functional
-status: planned
-risk: stable
-description: "Compute node state and set-node-state action verification."
-background: |-
-  Given 'controller' is deployed
-  Given 'compute' is deployed
 scenarios:
   - |-
     Set node state action updates node state and reason
     When I run action 'set-node-state' on unit 'controller/0' with parameters 'nodes=compute-0 state=down reason=maintenance'
     Then the node for unit 'compute/0' has state containing 'DOWN' and reason "'maintenance'"
-    When I run action 'set-node-state' on unit 'controller/0' with parameters 'nodes=compute-0 state=idle'
-    Then the node for unit 'compute/0' has state containing 'IDLE' and reason ""
 ```
 
-Note the two unit references per scenario:
-
-- **`When`** steps say `on unit 'controller/0'` — the action lives on
-  the `slurmctld` charm.
-- **`Then`** steps say `for unit 'compute/0'` — the custom
-  `node_name(unit)` helper derives the Slurm node name from this unit
-  (`compute/0` → `compute-0`), which is the node whose state changed.
+`When` uses `controller/0` (action executor); `Then` uses `compute/0`
+(node owner) so `node_name("compute/0")` → `compute-0` matches the
+node the action modified.
 
 ### Common pitfall — same unit in both steps
-
-It is tempting to copy the action unit into the `Then` step:
 
 ```yaml
 # WRONG — will silently time out
@@ -603,13 +478,7 @@ When I run action 'set-node-state' on unit 'controller/0' with parameters 'nodes
 Then the node for unit 'controller/0' has state containing 'DOWN' and reason "'maintenance'"
 ```
 
-Here `node_name("controller/0")` → `"controller-0"`, which is not a
-registered compute node. `scontrol --json show node controller-0` either
-returns an error or unexpected data, and the custom step's
-`context.wait(ready=...)` function catches `Exception` and returns
-`False` — so the poll retries silently every second until the 3-minute
-default `context.wait()` timeout, making it appear "stuck" rather than
-failing with a clear assertion error.
-
-When the action unit and the node-owner unit differ, the `Then` step
-must reference the **node owner**, not the action executor.
+`node_name("controller/0")` → `controller-0`, which is not a registered
+compute node. `context.wait()` catches the exception and retries silently
+until the 3-minute timeout, making it appear "stuck" rather than failing
+with a clear assertion error.

@@ -284,35 +284,15 @@ scenario order is already top-to-bottom in the `.feature` file.
 
 ## Verification checklist
 
-After migration, confirm:
+After migration, confirm (in addition to the DOs/DO NOTs in `SKILL.md`):
 
-- [ ] `gherkinator validate tests/integration/features/test-plan.yaml`
-      passes.
-- [ ] `gherkinator generate --format gh
-      tests/integration/features/test-plan.yaml --output-dir
-      tests/integration/features` produces one `.feature` file per
-      `TestPlan` document.
+- [ ] `gherkinator validate` passes.
+- [ ] `gherkinator generate` produces one `.feature` per `TestPlan` document.
 - [ ] Generated `.feature` files match the YAML source (no hand-edits).
-- [ ] Every original test scenario has a YAML `TestPlan` equivalent in
-      `test-plan.yaml`.
-- [ ] Each YAML plan uses `status: planned` initially; flip to
-      `implemented` only after the BDD suite is green for that plan.
-- [ ] Gherkin steps use the exact phrasing from the step reference in
-      `SKILL.md`.
-- [ ] No step handlers are imported from `pytest_jubilant_bdd._main`.
-- [ ] No custom `juju` fixture is defined; the plugin's `context` fixture
-      is used.
-- [ ] Custom steps use `context.wait()` for polling, not `tenacity`.
-- [ ] All `@pytest.fixture` definitions are in `conftest.py`, not in
-      helper modules like `bdd_utils.py`.
-- [ ] All `context.wait(ready=fn)` functions catch `Exception`, not just
-      `AssertionError`.
-- [ ] Custom steps shared across multiple `.feature` files are defined
-      in `conftest.py`.
-- [ ] `pytest-jubilant-bdd` is in the integration extras.
+- [ ] Every original test scenario has a YAML `TestPlan` equivalent.
+- [ ] `LOCAL_*` / charm-path environment variables still work.
 - [ ] `pytest tests/integration/ -v` passes.
 - [ ] Original non-BDD tests are retained until the BDD suite is green.
-- [ ] `LOCAL_*` / charm-path environment variables still work.
 
 ## Troubleshooting
 
@@ -359,24 +339,19 @@ features**
   duplicates.
 
 **`jubilant.TaskError` propagating from `context.wait()`**
-- The `ready` function only catches `AssertionError`, but
-  `juju.exec()` raises `TaskError` on non-zero exit codes. Change
-  `except AssertionError:` to `except Exception:` in the `ready`
-  function.
+- The `ready` function only catches `AssertionError`. Change it to
+  `except Exception:` (see SKILL.md DOs for why).
 
 **`command not found` after charm reaches `active` status**
 - Charm `active` status means reconciliation completed, but installed
   binaries may not be on `PATH` yet. Add a `context.wait()` polling
   loop that checks for the binary (e.g.,
-  `juju.exec("apptainer --version")`) before using it. This replaces
-  any `sleep(N)` from the original tests.
+  `juju.exec("apptainer --version")`) before using it.
 
 **Polling stuck / `context.wait()` times out after `set-node-state`**
-- The `Then` verification step references the unit the action ran on
-  (e.g., `controller/0`) instead of the unit whose node state changed
-  (e.g., `compute/0`). Custom steps that derive node names from unit
-  names (e.g., `unit.replace("/", "-")`) will query the wrong node, and
-  `context.wait()`'s `ready` function catches `Exception`, so the error
-  is silently retried until timeout. Check that the `Then` step's unit
-  matches the node owner, not the action executor. See the
-  `set-node-state` migration example in [examples.md](examples.md).
+- The `Then` step references the action's unit (e.g., `controller/0`)
+  instead of the node owner (e.g., `compute/0`). Custom steps that
+  derive node names from unit names will query the wrong node, and
+  `context.wait()`'s `ready` catches `Exception`, so it retries
+  silently until timeout. See the `set-node-state` example in
+  [examples.md](examples.md).
