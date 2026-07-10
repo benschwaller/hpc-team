@@ -170,9 +170,10 @@ tests/integration/
 | `juju.add_unit("app", num_units=N)` | `scenarios[i]` (steps) | `Given I add 'N' units to app 'app'` |
 | `juju.run("app/0", "action", params=...)` | `scenarios[i]` (steps) | `When I run action 'action' on unit 'app/0' [with parameters 'k=v']` |
 | `juju.exec("cmd", unit="app/0")` | `scenarios[i]` (steps) | `When I execute 'cmd' on unit 'app/0'` |
-| `juju.wait(lambda s: s.apps[...].status == "active")` | `scenarios[i]` (steps) | `Then the workload status for app 'app' is 'active'` (framework polls via `context.wait()`) |
+| `juju.wait(lambda s: s.apps[...].status == "active")` | `scenarios[i]` (steps) | `Then the workload status for app 'app' is 'active'` (framework polls via `context.wait()`). Do NOT put `juju.wait()` inside a custom deploy step if integrations happen in later steps — charms can't reach active without integrations. |
 | Custom status checker `def _ready(s): ...` passed to `juju.wait` | custom step | Keep as a helper, or wrap in a custom Then step that calls `context.wait(ready=...)` |
-| `tenacity.Retrying(...)` around an assertion | `scenarios[i]` (steps) | Drop tenacity; use `context.wait()` (or a built-in Then step, which already polls) |
+| `tenacity.Retrying(...)` around an assertion | `scenarios[i]` (steps) | Drop tenacity; use `context.wait()` (or a built-in Then step, which already polls). The `ready` function must catch `Exception` (not just `AssertionError`) because `juju.exec()` raises `jubilant.TaskError` on non-zero exit codes. |
+| `sleep(N)` after `juju.wait()` | custom step with `context.wait()` | Charm `active` status doesn't guarantee installed binaries are on `PATH` yet. Poll for the binary (e.g., `juju.exec("apptainer --version")`) instead of a fixed sleep. |
 | `@pytest.mark.order(N)` | (not migrated to YAML) | Preserve with the marker on the scenario-loading module; ordering is a charm-repo concern, not framework-level |
 | N/A | `feature` | `Feature: <feature>` line in generated `.feature`. |
 | N/A | `type` | First tag (`@functional`, `@reliability`, ...). |
@@ -208,14 +209,29 @@ markers = [
 ### `conftest.py`
 
 Do **not** define a `juju` fixture. The plugin provides `context`. Keep
-only charm-specific fixtures (charm path, base, env vars).
+only charm-specific fixtures (charm path, base, env vars), shared custom
+steps used by multiple feature files, and pytest hooks
+(`pytest_addoption`, `pytest_configure`, etc.).
 
 ```python
-"""Integration test fixtures."""
+"""Integration test fixtures and shared step definitions."""
 import os
 from pathlib import Path
 
 import pytest
+from pytest_bdd import parsers, when
+
+from pytest_jubilant_bdd import Context
+
+
+@pytest.fixture
+def scenario_state() -> dict:
+    """Per-scenario mutable state shared between Given/When/Then steps.
+
+    Must live in conftest.py — pytest does not discover fixtures from
+    helper modules like bdd_utils.py.
+    """
+    return {}
 
 
 @pytest.fixture(scope="session")
@@ -224,14 +240,13 @@ def charm_base(request: pytest.FixtureRequest) -> str:
     return request.config.getoption("--charm-base", default="ubuntu@24.04")
 
 
-@pytest.fixture(scope="session")
-def slurmctld_charm_path() -> Path:
-    """Local path to the built slurmctld charm.
-
-    The ``deploy_local`` step reads ``<APP>_CHARM_PATH`` from the
-    environment when ``located at '...'`` is omitted from the Gherkin step.
-    """
-    return Path(os.environ["SLURMCTLD_CHARM_PATH"])
+# Custom step shared across multiple .feature files — must be in
+# conftest.py because pytest-bdd resolves steps per-module.
+@when(parsers.parse("I reset the node configuration on unit '{unit}'"))
+def reset_node_config(context: Context, unit: str) -> None:
+    """Custom step available to ALL test_*_bdd.py modules."""
+    juju = context.get_juju()
+    juju.run(unit, "set-node-config", params={"reset": True})
 
 
 def pytest_addoption(parser: pytest.PytestParser) -> None:
@@ -239,6 +254,9 @@ def pytest_addoption(parser: pytest.PytestParser) -> None:
     parser.addoption("--charm-base", default="ubuntu@24.04")
     parser.addoption("--keep-models", action="store_true")
 ```
+
+Fixtures that need lifecycle management (e.g., starting/stopping an SMTP
+server) also belong here — plain step functions have no teardown hook.
 
 ## CLI options provided by the plugin
 
@@ -284,6 +302,12 @@ After migration, confirm:
 - [ ] No custom `juju` fixture is defined; the plugin's `context` fixture
       is used.
 - [ ] Custom steps use `context.wait()` for polling, not `tenacity`.
+- [ ] All `@pytest.fixture` definitions are in `conftest.py`, not in
+      helper modules like `bdd_utils.py`.
+- [ ] All `context.wait(ready=fn)` functions catch `Exception`, not just
+      `AssertionError`.
+- [ ] Custom steps shared across multiple `.feature` files are defined
+      in `conftest.py`.
 - [ ] `pytest-jubilant-bdd` is in the integration extras.
 - [ ] `pytest tests/integration/ -v` passes.
 - [ ] Original non-BDD tests are retained until the BDD suite is green.
@@ -313,3 +337,35 @@ After migration, confirm:
 **`TooManyDeployedAppsError`**
 - More than one model has an app with the same name. Add `in model
   'name'` to the relevant step.
+
+**`fixture 'X' not found`**
+- The fixture is defined in a helper module (e.g., `bdd_utils.py`)
+  instead of `conftest.py`. Move `@pytest.fixture` definitions to
+  `conftest.py` — pytest does not discover fixtures from non-conftest,
+  non-`test_*` modules.
+
+**`StepDefinitionNotFoundError` for a custom step used in multiple
+features**
+- The step is defined in one `test_*_bdd.py` module but used by a
+  `.feature` file loaded by a different module. pytest-bdd resolves
+  steps per-module — move the step to `conftest.py`.
+
+**`ValueError: option names {'--X'} already added`**
+- pytest found two `conftest.py` files defining the same
+  `pytest_addoption`. Check for accidentally duplicated directories
+  (e.g., `tests/integration/integration/conftest.py`). Run
+  `find . -name conftest.py -not -path "*/.venv/*"` to locate
+  duplicates.
+
+**`jubilant.TaskError` propagating from `context.wait()`**
+- The `ready` function only catches `AssertionError`, but
+  `juju.exec()` raises `TaskError` on non-zero exit codes. Change
+  `except AssertionError:` to `except Exception:` in the `ready`
+  function.
+
+**`command not found` after charm reaches `active` status**
+- Charm `active` status means reconciliation completed, but installed
+  binaries may not be on `PATH` yet. Add a `context.wait()` polling
+  loop that checks for the binary (e.g.,
+  `juju.exec("apptainer --version")`) before using it. This replaces
+  any `sleep(N)` from the original tests.

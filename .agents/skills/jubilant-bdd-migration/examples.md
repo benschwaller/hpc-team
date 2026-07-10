@@ -388,6 +388,13 @@ Prefer `context.wait()` over `tenacity`. `context.wait()` polls `ready`
 until it returns `True` three times in a row (configurable), then returns;
 it raises `TimeoutError` on timeout.
 
+**Important**: The `ready` function must catch `Exception` (not just
+`AssertionError`). `juju.exec()` raises `jubilant.TaskError` on non-zero
+exit codes — these are transient during node re-registration or service
+restarts. `tenacity.Retrying` caught all exceptions by default;
+`context.wait()` only retries when `ready` returns `False`, so any
+unhandled exception aborts the wait.
+
 ```python
 from pytest_bdd import then, parsers
 from pytest_jubilant_bdd import Context
@@ -401,10 +408,36 @@ def assert_message_contains(context: Context, unit: str, substring: str) -> None
     )
 ```
 
+For `juju.exec`-based polling (where the command may fail transiently),
+wrap the call in a try/except:
+
+```python
+@then(parsers.parse("a slurm gpu job submitted from unit '{login_unit}' runs on unit '{compute_unit}'"))
+def gpu_job_submission(context: Context, login_unit: str, compute_unit: str) -> None:
+    """Submit a GPU-requesting job and verify it runs on the compute node."""
+    juju = context.get_juju()
+    slurmd_result = juju.exec("hostname -s", unit=compute_unit)
+
+    def ready(_ctx: Context) -> bool:
+        try:
+            sackd_result = juju.exec(
+                f"srun --partition compute --gres gpu:1 hostname -s",
+                unit=login_unit,
+            )
+            assert sackd_result.stdout == slurmd_result.stdout
+            return True
+        except Exception:
+            return False
+
+    context.wait(ready=ready)
+```
+
 ### Shared state within a scenario
 
 Use a function-scoped fixture for state that must cross step boundaries
-within a single scenario.
+within a single scenario. **This fixture must live in `conftest.py`** —
+pytest does not discover fixtures from helper modules like `bdd_utils.py`
+or from `test_*_bdd.py` modules that aren't collected as test files.
 
 ```python
 import pytest
@@ -429,4 +462,61 @@ def capture_output(
 @then(parsers.parse("the captured output should be '{expected}'"))
 def assert_captured(scenario_state: dict, expected: str) -> None:
     assert scenario_state["stdout"] == expected
+```
+
+### Custom step shared across feature files
+
+pytest-bdd resolves step definitions only from the module where
+`scenarios()` is called, or from `conftest.py` files. A step defined in
+`test_node_operations_bdd.py` is invisible to `test_job_submission_bdd.py`.
+If a custom step is used by scenarios in multiple `.feature` files, define
+it in `conftest.py`:
+
+```python
+# conftest.py
+from pytest_bdd import parsers, when
+from pytest_jubilant_bdd import Context
+
+
+@when(parsers.parse("I reset the node configuration on unit '{unit}'"))
+def reset_node_config(context: Context, unit: str) -> None:
+    """Custom step available to ALL test_*_bdd.py modules."""
+    juju = context.get_juju()
+    juju.run(unit, "set-node-config", params={"reset": True})
+```
+
+### Binary availability after `active` status
+
+A charm reaching `active` status means its reconciliation loop has
+completed, but binaries it installs may not be immediately available on
+the unit's `PATH`. When migrating tests that had `sleep(N)` after
+`juju.wait()`, replace the fixed sleep with a `context.wait()` polling
+loop that checks for the binary:
+
+```python
+@given("I deploy 'apptainer' from channel 'latest/edge'")
+def deploy_apptainer(context: Context) -> None:
+    juju = context.get_juju()
+    juju.deploy("apptainer", channel="latest/edge")
+
+
+@then(parsers.parse("an apptainer container job submitted from unit '{login_unit}' runs on unit '{compute_unit}'"))
+def apptainer_oci_scheduling(context: Context, login_unit: str, compute_unit: str) -> None:
+    """Pull an OCI image and run a Slurm job inside an Apptainer container."""
+    juju = context.get_juju()
+
+    def apptainer_ready(_ctx: Context) -> bool:
+        try:
+            juju.exec("apptainer --version", unit=compute_unit)
+            return True
+        except Exception:
+            return False
+
+    context.wait(ready=apptainer_ready)
+
+    juju.exec(
+        "apptainer pull /tmp/jammy.sif docker://ghcr.io/charmed-hpc/ubuntu-test:jammy",
+        unit=compute_unit,
+    )
+    # ... rest of the test
 ```

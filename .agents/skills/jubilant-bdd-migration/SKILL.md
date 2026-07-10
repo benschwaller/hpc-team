@@ -46,6 +46,19 @@ structured YAML, validated against a strict schema, and transpiled into
   `scenarios("features/<name>.feature")`.
 - DO use `context.wait()` for polling in custom steps; drop
   `tenacity.Retrying`.
+- DO catch `Exception` (not just `AssertionError`) inside
+  `context.wait(ready=fn)` functions. `juju.exec()` and `juju.run()`
+  raise `jubilant.TaskError` on non-zero exit codes — these are transient
+  during node re-registration or service restarts. `tenacity.Retrying`
+  caught all exceptions by default; `context.wait()` only retries when
+  `ready` returns `False`, so any unhandled exception aborts the wait.
+- DO place all `@pytest.fixture` definitions and custom steps shared
+  across multiple `.feature` files in `conftest.py`. pytest-bdd only
+  resolves step definitions from the module where `scenarios()` is called
+  or from `conftest.py` — steps in one `test_*_bdd.py` are invisible to
+  other test modules. Likewise, pytest only discovers fixtures from
+  `conftest.py` and `test_*` modules, not from helper modules like
+  `bdd_utils.py`.
 - DO consult the `reusable-step-handler` skill in the pytest-jubilant-bdd
   repo for the canonical `Context` API when authoring custom steps.
 - DO keep the original non-BDD tests in place until the BDD suite is fully
@@ -60,6 +73,9 @@ structured YAML, validated against a strict schema, and transpiled into
   not part of the public API.
 - DO NOT define a `juju` fixture in `conftest.py` — the plugin provides
   `context`.
+- DO NOT place `@pytest.fixture` definitions in helper modules like
+  `bdd_utils.py`. Fixtures must live in `conftest.py` (or a `test_*`
+  module). Helper modules are for plain functions only.
 - DO NOT invent `type`, `status`, or `risk` values outside the enums
   enforced by `gherkinator validate`.
 - DO NOT modify production charm code in the target repo to make a test
@@ -115,7 +131,8 @@ parser).
 
 | Step phrasing | Handler | Notes |
 |---|---|---|
-| `Given I add model '{model}'` | `add_model` | Creates a model with a random suffix. |
+| `Given I add model '{model}'` | `add_model` | Creates a model with a random suffix. Does **not** switch the active model — follow with `Given I switch to model '{model}'` if subsequent steps don't use `in model '{model}'` clauses. |
+| `Given I switch to model '{model}'` | `switch_model` | Switches the context's default model. Use after `add_model` when subsequent steps omit `in model`. |
 | `Given I add '{n}' units to app '{app}' [in model '{model}']` | `add_unit` | `unit`/`units` both accepted. |
 | `Given I deploy '{app}' [in model '{model}'] [from channel '{channel}'] [on base '{base}'] [with '{n}' units]` | `deploy` | Charmhub deploy. |
 | `Given I deploy '{app}' from a local charm [located at '{path}'] [in model '{model}'] [on base '{base}'] [with '{n}' units]` | `deploy_local` | If `located at` omitted, reads `<APP>_CHARM_PATH` env var. |
@@ -130,7 +147,7 @@ parser).
 
 | Step phrasing | Handler | Notes |
 |---|---|---|
-| `When I run action '{action}' on unit '{u}' [with parameters '{k=v ...}'] [in model '{model}']` | `run_action` | `unit`/`units` accepted; multiple targets as `'a/0', 'a/1', and 'a/2'`; params like `'debug=true key=val'`. Results pushed to `context.action_results`. |
+| `When I run action '{action}' on unit '{u}' [with parameters '{k=v ...}'] [in model '{model}']` | `run_action` | `unit`/`units` accepted; multiple targets as `'a/0', 'a/1', and 'a/2'`; params like `'debug=true key=val'`. Results pushed to `context.action_results`. Parameters are parsed by `ast.literal_eval`, which cannot parse lowercase `true`/`false` (JSON/Shell style). For boolean action params, write a custom step that passes `params={"key": True}` directly to `juju.run()`. |
 | `When I execute '{command}' on machine '{m}' [in model '{model}']` | `run_exec` | `machine`/`machines` and `unit`/`units` accepted. Results pushed to `context.exec_results`. |
 
 **Then (attestation):**
@@ -283,16 +300,23 @@ row, or as `Scenario Outline: <title>` with `Examples:` when it does.
    the `context` fixture and `context.wait()` for polling. Templates are in
    [examples.md](examples.md).
 
+   If a custom step is used by scenarios in multiple `.feature` files
+   (loaded by different `test_*_bdd.py` modules), define it in
+   `conftest.py` instead — pytest-bdd resolves steps per-module, so steps
+   in one test module are invisible to others.
+
 7. **Configure the repo.** Add `pytest-jubilant-bdd` to the integration
    test dependencies. Do **not** redefine a `juju` fixture — the plugin
-   provides `context`. Do **not** import step handlers. See
-   [reference.md](reference.md) for `pyproject.toml` and `conftest.py`
-   snippets.
+   provides `context`. Do **not** import step handlers. Any
+   `@pytest.fixture` definitions that custom steps depend on (e.g.,
+   `scenario_state`, SMTP handlers) must live in `conftest.py`, not in
+   `bdd_utils.py` or a `test_*_bdd.py` module. See [reference.md](reference.md)
+   for `pyproject.toml` and `conftest.py` snippets.
 
 8. **Run the BDD suite** and confirm scenarios pass:
 
    ```bash
-   just integration
+   pytest tests/integration/ -v
    ```
 
    Fix-and-rerun until green. After the suite is green for a given plan,
@@ -313,6 +337,10 @@ row, or as `Scenario Outline: <title>` with `Examples:` when it does.
   custom-step guidance accordingly.
 - A test needs a step the framework genuinely doesn't provide — propose a
   custom step to the user rather than forcing a built-in to fit.
+- A charm action accepts a `boolean` parameter and the built-in
+  `run_action` step can't pass it correctly — write a custom step that
+  calls `juju.run()` with `params={"key": True}` directly instead of
+  forcing `True` (uppercase) in the YAML.
 
 ## Evaluation prompts
 
