@@ -294,6 +294,84 @@ After migration, confirm (in addition to the DOs/DO NOTs in `SKILL.md`):
 - [ ] `pytest tests/integration/ -v` passes.
 - [ ] Original non-BDD tests are retained until the BDD suite is green.
 
+## Migration fidelity checklist
+
+The verification checklist above confirms tooling and schema. This
+checklist confirms **semantic equivalence** — that each BDD scenario
+tests the same things its legacy test did. Work through it after the
+YAML and custom steps are written, before running the suite.
+
+### Assertions
+
+- [ ] Every `assert` in the legacy test has a corresponding `Then` step.
+      Common gap: a legacy test asserts multiple fields from one
+      `juju.exec` result (e.g. `return_code`, `status`, `stdout`), but
+      the BDD only checks one.
+- [ ] Precondition assertions are preserved. Legacy tests often assert
+      the starting state before an action (e.g. "3 controllers, all
+      UP" before scaling down). Without these, a prior scenario failure
+      cascades silently into the next. Add `Then` steps at the start of
+      the scenario that verify the expected starting state.
+- [ ] Multi-app status checks are not narrowed. If the legacy waits on
+      `all_active(*APPS)` (multiple apps), the BDD must check each app's
+      status — not just the primary. Missing this means an error in a
+      secondary app goes undetected until timeout.
+- [ ] Identity/hostname preservation checks are migrated. If the legacy
+      verifies that a specific unit remains primary after a topology
+      change, the BDD must do the same — otherwise a failover to the
+      wrong unit passes silently.
+
+### Action parameters
+
+- [ ] Every action parameter is preserved with the correct name, value,
+      and type. Compare the `params={...}` dict in the legacy `juju.run`
+      call against the YAML `with parameters '...'` string and any custom
+      step that re-parses it.
+- [ ] Parameters with comma-containing values are not split incorrectly.
+      If a legacy param value contains commas (e.g.
+      `storage={"osd-standalone": "loop,2G,3"}`), a custom step that
+      splits on `,` will corrupt it. Preserve the value as-is or use a
+      different parsing strategy.
+
+### Side effects and fixtures
+
+- [ ] `fast_forward` / config restoration. If the legacy uses a
+      function-scoped fixture that sets a config value and restores it
+      after the test, the BDD must also restore it. A Given step that
+      sets config without restoration leaks the value into subsequent
+      scenarios.
+- [ ] `juju.wait_timeout` is preserved. If the legacy sets a long
+      session timeout (e.g. `60*60`), verify that `context.wait()` calls
+      use an equivalent timeout. The plugin default is 180s; override
+      via `--juju-bdd-wait-timeout` or `Context(wait_timeout=...)`.
+- [ ] Debug-log-on-failure. If the legacy `juju` fixture prints
+      `juju.debug_log()` on test failure, add a equivalent
+      `conftest.py` hook (e.g. `pytest_runtest_makereport`) to preserve
+      debuggability.
+- [ ] `--keep-models` is honored. If the legacy `juju` fixture consumed
+      `--keep-models`, verify the plugin's `context` fixture or
+      `--juju-bdd-no-teardown` provides equivalent behavior.
+
+### Polling and timing
+
+- [ ] Fixed `sleep(N)` calls are replaced with `context.wait()` polling
+      loops, not dropped entirely. A `sleep` after `juju.wait()` usually
+      means the binary or service isn't ready yet — poll for readiness
+      instead.
+- [ ] `tenacity.Retrying` retry semantics are preserved. The legacy
+      retry count and wait interval may differ from `context.wait()`
+      defaults (3 consecutive successes, 1s delay, 180s timeout). If
+      the legacy retried for longer, increase `context.wait(timeout=...)`.
+
+### Markers and ordering
+
+- [ ] `@pytest.mark.order(N)` is applied to the scenario-loading module,
+      not to individual scenarios.
+- [ ] Custom markers (e.g. `@pytest.mark.high_availability`) are applied
+      via `pytestmark` on the scenario-loading module.
+- [ ] `@pytest.mark.skip` is preserved via `pytestmark` on the
+      scenario-loading module.
+
 ## Troubleshooting
 
 **`gherkinator validate` reports an invalid field**

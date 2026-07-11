@@ -228,15 +228,58 @@ row, or as `Scenario Outline: <title>` with `Examples:` when it does.
    use `jubilant` directly. Reference the pattern-mapping table in
    [reference.md](reference.md).
 
-2. **Map each test to a scenario.** For every `def test_*(...)`:
+2. **Map each test to a scenario.** This is the core migration step. For
+   every `def test_*(...)`, work through the following:
+
+   **Basic translation:**
    - Setup (deploys, models, config, integrations) → **Given** steps.
    - Actions (`juju.run`, `juju.exec`, config changes) → **When** steps.
    - Assertions (status, messages, command output, action results) →
      **Then** steps.
-   - Note any test that does NOT map to a built-in step — that becomes a
-     custom step.
    - Group tests into logical features (one `.feature` file per group:
      deployment, integration, operations, actions).
+
+   **Decisions that require judgment:**
+
+   - **Shared setup across tests.** If multiple tests repeat the same
+     deploy + integrate sequence, extract it into the feature's
+     `background` block rather than duplicating it in every scenario. The
+     background runs before every scenario in that feature.
+   - **`juju.wait()` calls.** These are assertions, not setup. Map them to
+     `Then the workload status for app '...' is 'active'` — do not put
+     `juju.wait()` inside a Given/deploy step, because a charm can't reach
+     `active` before its integrations exist.
+   - **Polling / retry loops (`tenacity.Retrying`, `@retry`, `sleep`).**
+     Drop them entirely. Map the assertion inside the loop to a `Then`
+     step; built-in `Then` steps already poll via `context.wait()`, and
+     custom `Then` steps should call `context.wait(ready=...)`.
+   - **Tests that check a side effect on a different unit.** When a test
+     runs an action on unit A but verifies state on unit B (e.g.
+     `set-node-state` on `slurmctld/0` changes a node on `slurmd/0`),
+     the `When` step uses unit A; the `Then` step must use unit B (the
+     node owner), because custom steps derive node names from the unit in
+     the step text. See the `set-node-state` example in
+     [examples.md](examples.md).
+   - **Multi-assertion tests.** A single legacy test with multiple
+     `assert` statements may map to multiple `Then` steps in one scenario,
+     or to multiple scenarios if the assertions test different preconditions.
+     Split by concern — don't force unrelated assertions into one scenario.
+   - **Tests with parametrized data (`@pytest.mark.parametrize`).** Map to
+     a `Scenario Outline` with an `Examples:` table. Use `<param>` tokens
+     in the scenario steps.
+   - **Tests that don't map to any built-in step.** Note these — each
+     becomes a custom step defined in the feature's `test_*.py` module (or
+     `conftest.py` if shared across features). Common candidates: running
+     `scontrol` commands, checking Slurm node state, verifying munge key
+     content, SMTP capture.
+   - **Test ordering (`@pytest.mark.order`).** Not migrated to YAML. Apply
+     the marker to the scenario-loading module (`scenarios(...)` line) if
+     cross-file ordering matters.
+
+   Reference the pattern-mapping table in [reference.md](reference.md)
+   for the jubilant→BDD translation of each API call, and the migration
+   fidelity checklist in [reference.md](reference.md) for semantic
+   equivalence checks (assertions, side effects, polling, markers).
 
 3. **Initialize gherkinator.** Run from the repo root:
 
