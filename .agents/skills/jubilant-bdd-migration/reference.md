@@ -168,6 +168,7 @@ tests/integration/
 | `juju.config("app", values={...})` | `scenarios[i]` (steps) | `Given I set 'key' for app 'app' to 'value'` |
 | `juju.config("app", reset=["key"])` | `scenarios[i]` (steps) | `Given I reset 'key' for app 'app'` |
 | `juju.add_unit("app", num_units=N)` | `scenarios[i]` (steps) | `Given I add 'N' units to app 'app'` |
+| `juju.remove_unit("app/N", force=True)` for a down/failed unit | custom step | The built-in remove-unit step does not pass `force=True`. Units whose machine is `down` require `force=True` — write a custom `@when` step. |
 | `juju.run("app/0", "action", params=...)` | `scenarios[i]` (steps) | `When I run action 'action' on unit 'app/0' [with parameters 'k=v']` |
 | `juju.exec("cmd", unit="app/0")` | `scenarios[i]` (steps) | `When I execute 'cmd' on unit 'app/0'` |
 | `juju.run(unit_A, "action")` where the action modifies state of a node on unit_B, then `juju.exec("scontrol ... node <unit_B-name>", unit=unit_A)` | `scenarios[i]` (steps) | `When I run action 'action' on unit 'unit_A' ...` + custom `Then ... unit 'unit_B' ...` (verification step references the **node owner**, not the action executor) |
@@ -279,8 +280,61 @@ from pytest_bdd import scenarios
 scenarios("features/integration.feature")
 ```
 
+When combining `order` with `skip` or a custom gating marker, use the list
+form of `pytestmark`:
+
+```python
+pytestmark = [
+    pytest.mark.order(19),
+    pytest.mark.high_availability,
+]
+```
+
+```python
+pytestmark = [
+    pytest.mark.order(12),
+    pytest.mark.skip(reason="influxdb charm deployment is currently broken"),
+]
+```
+
 Only do this if cross-file ordering genuinely matters; intra-feature
 scenario order is already top-to-bottom in the `.feature` file.
+
+## Opt-in test gating
+
+When a feature is slow or destructive (HA, failover, scale testing), gate
+it behind an opt-in CLI flag. This requires three conftest hooks working
+together:
+
+```python
+def pytest_addoption(parser: pytest.PytestParser) -> None:
+    parser.addoption(
+        "--run-high-availability",
+        action="store_true",
+        default=False,
+        help="run high availability tests (slow)",
+    )
+
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers", "high_availability: marks tests as slow HA tests"
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    if config.getoption("--run-high-availability"):
+        return
+    skip_ha = pytest.mark.skip(reason="need --run-high-availability option to run")
+    for item in items:
+        if "high_availability" in item.keywords:
+            item.add_marker(skip_ha)
+```
+
+Register the marker in `pytest_configure` (silences `PytestUnknownMarkWarning`),
+register the flag in `pytest_addoption`, and enforce the skip in
+`pytest_collection_modifyitems`. Combine with the `pytestmark` list form
+shown above on the scenario-loading module.
 
 ## Verification checklist
 
@@ -433,3 +487,9 @@ features**
   `context.wait()`'s `ready` catches `Exception`, so it retries
   silently until timeout. See the `set-node-state` example in
   [examples.md](examples.md).
+
+**Step doesn't match when a field is empty (`""`)**
+- `parsers.parse` defaults to `(.+)` which requires at least one
+  character. Switch to `parsers.re` with `[^"]*` (or `[^']*`) so the
+  field accepts empty strings:
+  `r'and reason "(?P<reason>[^"]*)"'`.

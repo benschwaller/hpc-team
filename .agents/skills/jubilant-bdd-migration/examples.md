@@ -422,8 +422,12 @@ def gpu_job_submission(context: Context, login_unit: str, compute_unit: str) -> 
 
 ### Shared state within a scenario
 
-Use a function-scoped fixture for state that must cross step boundaries
-within a single scenario. This fixture must live in `conftest.py`.
+Use a function-scoped `scenario_state` fixture when a legacy test captures
+state before an action and asserts it changed after — e.g., capture an
+initial key in a `Given` step, run a rotation action in a `When` step,
+then assert the key changed in a `Then` step. This fixture must live in
+`conftest.py`. Use `And` to chain multiple `Given` captures in the YAML
+before the `When` step.
 
 ```python
 import pytest
