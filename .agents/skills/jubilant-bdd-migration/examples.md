@@ -30,7 +30,14 @@ def test_deploy_and_check(juju):
 
 ### After (gherkinator-controlled BDD)
 
-YAML in `tests/integration/features/test-plan.yaml`:
+**1. Initialize the test plan:**
+
+```bash
+gherkinator init tests/integration/features --name test-plan
+```
+
+**2. Author the YAML** in `tests/integration/features/test-plan.yaml`
+(`gherkinator edit <path>` opens it in `$EDITOR`):
 
 ```yaml
 feature: "Slurmctld deployment"
@@ -46,6 +53,25 @@ scenarios:
     Given I deploy 'slurmctld' from channel 'latest/edge'
     When I run action 'get-password' on unit 'slurmctld/0'
     Then the workload status for app 'slurmctld' is 'active'
+```
+
+**3. Validate the schema:**
+
+```bash
+gherkinator validate tests/integration/features/test-plan.yaml
+```
+
+Expected output:
+
+```
+All 1 test plan(s) are valid.
+```
+
+**4. Generate the `.feature` file:**
+
+```bash
+gherkinator generate --format gh tests/integration/features/test-plan.yaml \
+  --output-dir tests/integration/features
 ```
 
 Generated `slurmctld_deployment.feature`:
@@ -65,7 +91,7 @@ Feature: Slurmctld deployment
     Then the workload status for app 'slurmctld' is 'active'
 ```
 
-`tests/integration/test_deployment.py`:
+**5. Load the scenarios** in `tests/integration/test_deployment.py`:
 
 ```python
 """BDD step definitions for slurmctld deployment."""
@@ -74,11 +100,21 @@ from pytest_bdd import scenarios
 scenarios("features/slurmctld_deployment.feature")
 
 # No custom steps needed — every step above is provided by
-# pytest-jubilant-bdd.
+# pytest-jubilant-bdd. Action results are available on the `context`
+# fixture (context.action_results) if a later scenario needs to inspect
+# them.
 ```
 
-After the suite is green, flip `status: planned` → `status: implemented`
-and re-run `gherkinator generate`.
+**6. Run the suite:**
+
+```bash
+pytest tests/integration/ -v
+```
+
+**7. Flip `status` to `implemented` once green** — edit the YAML,
+change `status: planned` to `status: implemented`, then re-run
+`gherkinator generate` so the regenerated `.feature` carries the
+`@implemented` tag.
 
 ## Local-charm deploy example
 
@@ -252,7 +288,25 @@ produces three `.feature` files in one shot:
 
 ## Incremental migration with `--risk` / `--status`
 
-See [reference.md](reference.md) for the risk/status filtering table.
+During a multi-day migration, generate only the plans you intend to ship.
+`--risk` is cumulative (selects the given level **and** higher), `--status`
+is exact-match. See [reference.md](reference.md) for the filtering table.
+
+```bash
+# Only the highest-criticality (edge) plans that are newly migrated.
+gherkinator generate --format gh tests/integration/features/test-plan.yaml \
+  --output-dir tests/integration/features \
+  --status planned --risk edge
+
+# Bump to candidate once edge-risk plans are green; adds beta + edge.
+gherkinator generate --format gh tests/integration/features/test-plan.yaml \
+  --output-dir tests/integration/features \
+  --status planned --risk candidate
+```
+
+After all `status: planned` plans in a risk band are green, edit each
+YAML document's `status: planned` → `status: implemented` and re-run
+without filters to regenerate the full set.
 
 ## Removing a plan you no longer want
 
@@ -287,9 +341,24 @@ gherkinator generate --format gh tests/integration/features/test-plan.yaml \
 
 ## Custom step templates
 
+> This section covers **charm-repo ad-hoc custom steps** — step
+> definitions written in your own `conftest.py` or `test_*.py` to
+> extend the built-in handlers. If you are adding a new built-in
+> step handler to the `pytest-jubilant-bdd` plugin itself
+> (modifying `src/pytest_jubilant_bdd/_main.py`), see the
+> **`reusable-step-handler`** skill in the pytest-jubilant-bdd repo
+> (`.agents/skills/reusable-step-handler/SKILL.md`) instead — it
+> covers parser selection (`parse` vs `flexible` vs `re`), `%…%`
+> block syntax, private-helper patterns, error class conventions,
+> and unit-test wiring.
+
 Custom steps take the `context` fixture and use `context.wait()` for
-polling. See `SKILL.md` DOs for the `Exception`-catching rule and the
-`conftest.py` placement rule.
+polling. For the exact `Context` API (`get_juju`, `get_app`,
+`action_results` / `exec_results` stacks, `wait()` signatures,
+`assertions` namespaces), defer to the **`reusable-step-handler`** skill
+in the pytest-jubilant-bdd repo
+(`.agents/skills/reusable-step-handler/SKILL.md`). See `SKILL.md` DOs
+for the `Exception`-catching rule and the `conftest.py` placement rule.
 
 ### Inspecting action / exec results
 

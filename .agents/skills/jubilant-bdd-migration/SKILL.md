@@ -96,25 +96,37 @@ structured YAML, validated against a strict schema, and transpiled into
 
 These are verified against the installed `pytest-jubilant-bdd` package.
 
-- **Auto-registration.** The plugin registers via the `pytest11` entry point.
-  Installing it makes all built-in `@given`/`@when`/`@then` handlers
-  available to pytest-bdd. Consumers never import step handlers.
+- **Auto-registration.** The plugin registers via the `pytest11` entry point
+  (`pyproject.toml` → `pytest_jubilant_bdd._main`). Installing the package
+  makes all built-in `@given`/`@when`/`@then` handlers available to
+  pytest-bdd. Consumers **never import the step handlers**.
 - **Public API** (`from pytest_jubilant_bdd import ...`): `Context`,
-  `assertions`, `flexible`, `make_dict`, `make_list`. `Context` is the
-  fixture type; the rest are for authoring custom steps.
-- **The `context` fixture** (session-scoped) replaces a hand-rolled `juju`
-  fixture.
-- **CLI options**: `--juju-bdd-no-teardown`, `--juju-bdd-wait-timeout <sec>`
-  (default 180s).
-- **Dependencies**: `jubilant ~= 1.0`, `pytest-bdd ~= 8.0`. Requires Python
-  `>=3.12`.
+  `assertions`, `flexible`, `make_dict`, `make_list`. Only these are
+  importable. `Context` is the fixture type; the rest are for authoring
+  custom steps.
+- **The `context` fixture** (session-scoped, provided by the plugin) yields
+  a `Context` object. It replaces a hand-rolled `juju` fixture. Do **not**
+  define a `juju` fixture in the charm repo's `conftest.py`.
+- **CLI options** registered by the plugin: `--juju-bdd-no-teardown` (skip
+  model teardown) and `--juju-bdd-wait-timeout <sec>` (default 180s).
+- **Dependencies** (the plugin pulls these in): `jubilant ~= 1.0`,
+  `pytest-bdd ~= 8.0`. Requires Python `>=3.12`.
 
 ### Authoritative reference: the `context` fixture API
 
-For the full `Context` API (`get_juju`, `get_app`, `action_results` /
-`exec_results` stacks, `wait()` semantics), consult the
+The full `Context` API — `context.get_juju()`, `context.get_app()` /
+`get_apps()` / `get_unit()`, the `action_results` / `exec_results` stacks,
+`context.wait()` polling semantics, and the `assertions.app` / `.model` /
+`.unit` namespaces — is documented authoritatively in the
 **`reusable-step-handler`** skill in the pytest-jubilant-bdd repo:
 `.agents/skills/reusable-step-handler/SKILL.md`.
+
+That skill is the source of truth for the `context` fixture and for how
+reusable handlers integrate with it. Consult it whenever you need the exact
+signature, return type, or error class for a `Context` method, or when
+authoring custom steps. The migration skill only restates the high-level
+patterns needed to map existing jubilant code onto built-in steps (see
+[reference.md](reference.md)).
 
 ## Reusable step reference
 
