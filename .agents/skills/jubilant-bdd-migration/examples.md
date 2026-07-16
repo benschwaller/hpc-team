@@ -353,12 +353,11 @@ gherkinator generate --format gh tests/integration/features/test-plan.yaml \
 > and unit-test wiring.
 
 Custom steps take the `context` fixture and use `context.wait()` for
-polling. For the exact `Context` API (`get_juju`, `get_app`,
-`action_results` / `exec_results` stacks, `wait()` signatures,
-`assertions` namespaces), defer to the **`reusable-step-handler`** skill
-in the pytest-jubilant-bdd repo
-(`.agents/skills/reusable-step-handler/SKILL.md`). See `SKILL.md` DOs
-for the `Exception`-catching rule and the `conftest.py` placement rule.
+polling. For the exact `Context` API, defer to the
+**`reusable-step-handler`** skill
+(`.agents/skills/reusable-step-handler/SKILL.md`); the
+`Exception`-catching and `conftest.py` placement rules are in `SKILL.md`
+DOs.
 
 ### Inspecting action / exec results
 
@@ -557,10 +556,6 @@ scenarios:
     Then the acme service on the unit that is primary is running as primary
     Then the acme service on the unit that is replica is running in background mode
 ```
-
-The snapshot also makes scenarios **independently runnable** — each
-captures its own starting state via `Given` rather than assuming a prior
-scenario left it that way.
 
 ### Custom step shared across feature files
 

@@ -72,10 +72,11 @@ structured YAML, validated against a strict schema, and transpiled into
   `node_name(unit)` derive the Slurm node name from the unit in the step
   text. Using the action unit in the `Then` step silently queries the wrong
   node — `context.wait()` catches the exception and polls until timeout.
-- DO make each scenario self-contained. Re-establish starting state via
-  explicit `Given` steps; never rely on a sibling scenario's side effects.
-  BDD scenarios can be filtered (`-k`), reordered, or run in isolation.
-  If a scenario can't be decoupled, surface it to the user.
+- DO make each scenario **and feature** self-contained. Re-establish
+  starting state via explicit `Given` steps; never rely on a sibling
+  scenario's or another feature's side effects. BDD scenarios can be
+  filtered (`-k`), reordered, or run in isolation. If a scenario can't
+  be decoupled, propose a combined scenario to the user.
 - DO snapshot role→unit mappings into `scenario_state` *before* actions
   that shift which unit holds a role (primary/backup, leader/follower). A
   `Given I record the current role assignments` step captures the mapping;
@@ -84,9 +85,6 @@ structured YAML, validated against a strict schema, and transpiled into
 - DO register state-checking handlers under **both** `@given` and `@then`
   when the same check is both precondition and attestation. Never stack
   `@when` with either.
-- DO make each feature self-contained — no dependency on state another
-  feature leaves behind. If feature B needs state feature A produces, add
-  a `Given` step inside B that ensures it.
 - DO qualify ambiguous nouns in custom step phrasing (`controller`, `node`,
   `job`). Step definitions are global; terse nouns collide across features.
 - DO treat command-running *preparation* as `Given`, not `When`. A step
@@ -278,12 +276,9 @@ row, or as `Scenario Outline: <title>` with `Examples:` when it does.
       deploy + integrate sequence, extract it into the feature's
       `background` block rather than duplicating it in every scenario. The
       background runs before every scenario in that feature.
-    - **Chained legacy tests.** Legacy `test_*` functions are often
-      chained (one deploys, the next scales, the next fails over). BDD
-      scenarios can be filtered or run in isolation, which breaks the
-      chain. Lift each scenario's required starting state into explicit
-      `Given` preconditions. If a scenario can't be decoupled, flag it to
-      the user — a combined scenario may be the right answer.
+    - **Chained legacy tests.** Lift each scenario's required starting
+      state into `Given` preconditions (see the self-contained DO); if
+      it can't be decoupled, propose a combined scenario.
    - **`juju.wait()` calls.** These are assertions, not setup. Map them to
      `Then the workload status for app '...' is 'active'` — do not put
      `juju.wait()` inside a Given/deploy step, because a charm can't reach
@@ -292,13 +287,9 @@ row, or as `Scenario Outline: <title>` with `Examples:` when it does.
      Drop them entirely. Map the assertion inside the loop to a `Then`
      step; built-in `Then` steps already poll via `context.wait()`, and
      custom `Then` steps should call `context.wait(ready=...)`.
-   - **Tests that check a side effect on a different unit.** When a test
-     runs an action on unit A but verifies state on unit B (e.g.
-     `set-node-state` on `slurmctld/0` changes a node on `slurmd/0`),
-     the `When` step uses unit A; the `Then` step must use unit B (the
-     node owner), because custom steps derive node names from the unit in
-     the step text. See the `set-node-state` example in
-     [examples.md](examples.md).
+    - **Tests that check a side effect on a different unit.** The `When`
+      uses the action unit; the `Then` uses the node-owner unit — see the
+      DO above and the walkthrough in [examples.md](examples.md).
    - **Multi-assertion tests.** A single legacy test with multiple
      `assert` statements may map to multiple `Then` steps in one scenario,
      or to multiple scenarios if the assertions test different preconditions.
@@ -404,13 +395,6 @@ row, or as `Scenario Outline: <title>` with `Examples:` when it does.
   custom-step guidance accordingly.
 - A test needs a step the framework genuinely doesn't provide — propose a
   custom step to the user rather than forcing a built-in to fit.
-- A charm action accepts a `boolean` parameter and the built-in
-  `run_action` step can't pass it correctly — write a custom step that
-  calls `juju.run()` with `params={"key": True}` directly instead of
-  forcing `True` (uppercase) in the YAML.
-- A scenario can't be decoupled from a sibling's side effects, and the
-  precondition can't be re-established by a `Given` step — propose a
-  combined scenario to the user.
 
 ## Evaluation prompts
 

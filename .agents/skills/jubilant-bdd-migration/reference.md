@@ -365,13 +365,10 @@ YAML and custom steps are written, before running the suite.
       tests often assert starting state before an action (e.g. "3
       controllers, all UP" before scaling down). Migrate each to a `Given`
       so the scenario verifies its own starting state.
-- [ ] Scenarios are independently runnable. Each scenario must
-      re-establish its own starting state via `Given` steps — no reliance
-      on a sibling's side effects. Verify by imagining each run alone or
-      with `pytest -k <name>`.
-- [ ] Features are self-contained. A feature must not depend on state
-      another feature leaves behind. If feature B needs state feature A
-      produces, add a `Given` inside B that ensures it.
+- [ ] Scenarios and features are self-contained. Each re-establishes its
+      own starting state via `Given` steps — no reliance on a sibling
+      scenario's or another feature's side effects. Verify with
+      `pytest -k <name>`.
 - [ ] Multi-app status checks are not narrowed. If the legacy waits on
       `all_active(*APPS)` (multiple apps), the BDD must check each app's
       status — not just the primary. Missing this means an error in a
