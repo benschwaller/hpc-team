@@ -374,8 +374,21 @@ row, or as `Scenario Outline: <title>` with `Examples:` when it does.
 8. **Run the BDD suite** and confirm scenarios pass:
 
    ```bash
-   pytest tests/integration/ -v
+   # Standard. Recipes live in the repo's `justfile`.
+   just integration
+   # or, if the repo only has a `test` dispatcher:
+   just test integration
    ```
+
+   Charm repos standardise on `justfile` recipes (`just unit`,
+   `just integration`, `just fmt`, `just lint`, etc.) as the single
+   entrypoint for everything — they embed preparatory steps like package
+   installation, charm builds, and dependency resolution. Inspect the
+   repo's `justfile` first (`just --show <recipe>` or read it) to find
+   the exact recipe name and any prerequisites it expects. Run the
+   recipe, not `pytest` directly. If the repo does not have a
+   `justfile`, fall back to `pytest tests/integration/ -v` and note the
+   gap.
 
    Fix-and-rerun until green. After the suite is green for a given plan,
    flip the corresponding YAML `status` field from `planned` to
