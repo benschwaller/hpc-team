@@ -454,6 +454,181 @@ def assert_captured(scenario_state: dict, expected: str) -> None:
     assert scenario_state["stdout"] == expected
 ```
 
+### Snapshotting a role→unit mapping before a failover
+
+The `scenario_state` fixture has a second, less obvious use: snapshotting a
+**role→unit mapping** (primary/replica, leader/follower) *before* an action
+that shifts which unit holds the role, so every subsequent step in the
+scenario references the same physical unit.
+
+Consider a charm that runs an `acme` service in primary/replica mode. A
+legacy test might:
+
+1. Query `acmectl ping` to learn which unit is primary.
+2. Stop the `acme` service on that primary unit.
+3. Assert the replica's service is now running as primary.
+
+If the BDD migration re-queries `acmectl ping` inside the `When` step, the
+failover may have already begun by the time it runs — so the query returns
+the *new* primary, and the `When` stops the wrong unit. The fix is to
+record the mapping in a `Given` step and read from the snapshot throughout.
+
+The example below is intentionally generic (no Slurm specifics). It also
+demonstrates the dual `@given`/`@then` registration pattern: the same
+state-checking handler serves as both precondition and attestation.
+
+> **Rule of thumb for dual registration.** Stack `@given` and `@then` on a
+> handler that only *checks* state. Never stack `@when` with either —
+> `When` is for actions under test, not for state checks.
+
+#### `conftest.py` (fixture + shared snapshot helpers)
+
+```python
+import pytest
+from pytest_bdd import given, when, then, parsers
+from pytest_jubilant_bdd import Context
+
+
+@pytest.fixture
+def scenario_state() -> dict:
+    """Per-scenario mutable state shared between Given/When/Then steps."""
+    return {}
+
+
+def _query_roles(context: Context) -> dict:
+    """Query live role→unit assignments from the service.
+
+    Returns e.g. {"primary": {"unit": "acme/0", "hostname": "node-a"},
+                  "replica": {"unit": "acme/1", "hostname": "node-b"}}.
+    """
+    juju = context.get_juju()
+    # Imagine: `acmectl ping -j` prints JSON mapping roles to units.
+    out = juju.exec("acmectl ping -j", unit="acme/0").stdout
+    import json
+    return json.loads(out)
+
+
+def _roles(context: Context, scenario_state: dict) -> dict:
+    """Return the recorded snapshot if present, else query fresh.
+
+    Steps that need a *stable* role→unit reference across a topology-
+    changing action must call this helper so the snapshot captured *before*
+    the state change is used throughout the scenario.
+    """
+    if "roles" in scenario_state:
+        return scenario_state["roles"]
+    return _query_roles(context)
+
+
+# ---------------------------------------------------------------------------
+# Snapshot step
+# ---------------------------------------------------------------------------
+
+
+@given("I record the current role assignments")
+def record_roles(context: Context, scenario_state: dict) -> None:
+    """Snapshot the current primary/replica unit mapping.
+
+    Subsequent When/Then steps reference units by their recorded role
+    rather than re-querying, whose assignments may shift mid-action.
+    """
+    scenario_state["roles"] = _query_roles(context)
+
+
+# ---------------------------------------------------------------------------
+# State-checking step, usable as both Given (precondition) and Then
+# (attestation). Notice the stacked decorators — one handler, two keywords.
+# ---------------------------------------------------------------------------
+
+
+@given(parsers.parse("the acme service that is {role} reports status '{status}'"))
+@then(parsers.parse("the acme service that is {role} reports status '{status}'"))
+def role_status(context: Context, scenario_state: dict, role: str, status: str) -> None:
+    """Assert the service in the given role reports the given ping status."""
+    roles = _roles(context, scenario_state)
+
+    def check(current):
+        assert role in current, f"role '{role}' not found in {current}"
+        assert current[role]["status"] == status, (
+            f"expected {role} status '{status}', got '{current[role]['status']}'"
+        )
+
+    def ready(_ctx: Context) -> bool:
+        try:
+            check(_query_roles(context))
+            return True
+        except Exception:
+            return False
+
+    context.wait(ready=ready)
+
+
+# ---------------------------------------------------------------------------
+# Action step — reads the snapshot, NOT a fresh query
+# ---------------------------------------------------------------------------
+
+
+@when("I stop the acme service on the unit that is primary")
+def stop_primary(context: Context, scenario_state: dict) -> None:
+    """Stop the acme service on the primary unit.
+
+    Reads from the recorded snapshot so the action targets the unit that
+    was primary *when the snapshot was taken* — even if failover has begun
+    by the time this step runs.
+    """
+    juju = context.get_juju()
+    roles = _roles(context, scenario_state)   # ← snapshot, not fresh query
+    unit = roles["primary"]["unit"]
+    juju.exec(f"sudo systemctl stop acme", unit=unit)
+```
+
+#### YAML test plan
+
+```yaml
+feature: "Acme high availability"
+type: reliability
+status: planned
+risk: stable
+description: "Failover and recovery for the acme primary/replica service."
+background: |-
+  Given I add model 'test'
+  Given I switch to model 'test'
+scenarios:
+  - |-
+    Service failover to replica
+    Given I record the current role assignments
+    Given the acme service that is primary reports status 'UP'
+    Given the acme service that is replica reports status 'UP'
+    When I stop the acme service on the unit that is primary
+    Then the acme service that is replica reports status 'UP'
+    Then the acme service on the unit that is replica is running as primary
+  - |-
+    Service recovery after restarting primary
+    Given I record the current role assignments
+    Given the acme service that is primary reports status 'DOWN'
+    Given the acme service that is replica reports status 'UP'
+    When I restart the acme service on the unit that is primary
+    Then the acme service that is primary reports status 'UP'
+    Then the acme service on the unit that is primary is running as primary
+    Then the acme service on the unit that is replica is running in background mode
+```
+
+#### Why the snapshot matters
+
+Without `Given I record the current role assignments`, the `When I stop
+the acme service on the unit that is primary` step would call
+`_query_roles(context)` at execution time. If failover has already begun
+(e.g. the primary is unresponsive and the replica has started promoting
+itself), the query may return the *new* primary, and the `When` step
+stops the wrong unit — silently doing nothing to the unit the scenario
+intended to test. `context.wait()` would then poll the replica for
+"running as primary" and either pass against the wrong unit or time out
+with no clear assertion error.
+
+The snapshot also makes the scenario **independently runnable**: it
+captures its own starting state (`Given ... primary reports status 'UP'`)
+rather than assuming a prior scenario left the service in that state.
+
 ### Custom step shared across feature files
 
 If a custom step is used by scenarios in multiple `.feature` files, define
