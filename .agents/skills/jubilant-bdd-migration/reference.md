@@ -362,24 +362,16 @@ YAML and custom steps are written, before running the suite.
       `juju.exec` result (e.g. `return_code`, `status`, `stdout`), but
       the BDD only checks one.
 - [ ] Precondition assertions are preserved **and made explicit**. Legacy
-      tests often assert the starting state before an action (e.g. "3
-      controllers, all UP" before scaling down). Migrate each such assertion
-      to a `Given` (or a `Then` at the top of the scenario) so the scenario
-      verifies its own starting state. Without these, a prior scenario
-      failure cascades silently into the next.
-- [ ] Scenarios are independently runnable. Each scenario must re-establish
-      its own starting state via `Given` steps and must not rely on side
-      effects from a sibling scenario. Verify by imagining each scenario
-      run alone or with `pytest -k <scenario_name>`: if it would fail
-      because a prior scenario's state is missing, add `Given` preconditions
-      until it stands on its own. Legacy `test_*` functions are frequently
-      chained; BDD scenarios can be filtered, reordered, or run in
-      isolation, which breaks an unbroken chain.
+      tests often assert starting state before an action (e.g. "3
+      controllers, all UP" before scaling down). Migrate each to a `Given`
+      so the scenario verifies its own starting state.
+- [ ] Scenarios are independently runnable. Each scenario must
+      re-establish its own starting state via `Given` steps — no reliance
+      on a sibling's side effects. Verify by imagining each run alone or
+      with `pytest -k <name>`.
 - [ ] Features are self-contained. A feature must not depend on state
-      another feature happens to leave behind. If feature B needs state
-      feature A produces, add a `Given` step inside B that ensures (and, if
-      necessary, repairs) that state — even if A runs first in the typical
-      ordering.
+      another feature leaves behind. If feature B needs state feature A
+      produces, add a `Given` inside B that ensures it.
 - [ ] Multi-app status checks are not narrowed. If the legacy waits on
       `all_active(*APPS)` (multiple apps), the BDD must check each app's
       status — not just the primary. Missing this means an error in a
@@ -410,13 +402,9 @@ YAML and custom steps are written, before running the suite.
       scenarios.
 - [ ] Role→unit mappings are snapshotted before topology-changing
       actions. If the legacy test captures which unit is primary/leader
-      before a failover and then references that unit throughout, the BDD
-      must do the same: a `Given` step records the mapping into
-      `scenario_state`, and subsequent `When`/`Then` steps read from the
-      snapshot rather than re-querying. Without the snapshot, a `When`
-      that re-queries mid-failover may target the *new* primary and act on
-      the wrong unit. See the snapshot-then-act example in
-      [examples.md](examples.md).
+      before a failover, the BDD must do the same: a `Given` records the
+      mapping into `scenario_state`; subsequent steps read the snapshot
+      rather than re-querying. See [examples.md](examples.md).
 - [ ] `juju.wait_timeout` is preserved. If the legacy sets a long
       session timeout (e.g. `60*60`), verify that `context.wait()` calls
       use an equivalent timeout. The plugin default is 180s; override

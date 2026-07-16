@@ -72,44 +72,27 @@ structured YAML, validated against a strict schema, and transpiled into
   `node_name(unit)` derive the Slurm node name from the unit in the step
   text. Using the action unit in the `Then` step silently queries the wrong
   node — `context.wait()` catches the exception and polls until timeout.
-- DO make each scenario self-contained. A scenario must re-establish its own
-  starting state via explicit `Given` steps and must not rely on side effects
-  left by a sibling scenario. Legacy `test_*` functions are often implicitly
-  chained (one deploys, the next scales, the next fails over); BDD scenarios
-  can be filtered (`-k`), reordered, or run in isolation, which breaks an
-  unbroken chain. List each scenario's required starting topology, unit
-  counts, and statuses as `Given` preconditions. If a scenario genuinely
-  cannot be decoupled, surface it to the user — do not leave an implicit
-  cross-scenario dependency.
-- DO snapshot role→unit mappings into `scenario_state` *before* any action
-  that shifts which unit holds a role (primary/backup, leader/follower).
-  Add a `Given I record the current role assignments` step that captures the
-  mapping; subsequent `When`/`Then` steps read from the snapshot rather than
-  re-querying. Without the snapshot, a `When` step that re-queries mid-action
-  may target the *new* primary after failover has begun, silently doing the
-  wrong thing. See the snapshot-then-act example in [examples.md](examples.md).
+- DO make each scenario self-contained. Re-establish starting state via
+  explicit `Given` steps; never rely on a sibling scenario's side effects.
+  BDD scenarios can be filtered (`-k`), reordered, or run in isolation.
+  If a scenario can't be decoupled, surface it to the user.
+- DO snapshot role→unit mappings into `scenario_state` *before* actions
+  that shift which unit holds a role (primary/backup, leader/follower). A
+  `Given I record the current role assignments` step captures the mapping;
+  subsequent `When`/`Then` steps read from the snapshot so they target the
+  same physical unit even after failover begins. See [examples.md](examples.md).
 - DO register state-checking handlers under **both** `@given` and `@then`
-  when the same check serves as both precondition and attestation. Stack the
-  decorators on one function rather than duplicating the handler. Never stack
-  `@when` with either — `When` is for actions under test, not for state
-  checks.
-- DO make each feature self-contained. A feature must not depend on state
-  another feature happens to leave behind. If feature B needs state feature A
-  produces, add a `Given` step inside B that ensures (and, if necessary,
-  repairs) that state — even if A runs first in the typical ordering.
-- DO qualify ambiguous nouns in custom step phrasing. pytest-bdd step
-  definitions are global across every `.feature` file loaded by collected
-  modules; terse nouns (`controller`, `node`, `job`, `service`) collide or
-  read ambiguously across features. Qualify them by domain
-  (`slurmctld controller`, `slurmd node`, `slurm srun job`, `smtp
-  notification`).
-- DO treat command-running *preparation* as `Given`, not `When`. A step that
-  runs a command on a unit only to prepare state (create pools, register a
-  client, set up a mock device, seed a file) is `Given` — even though it
-  executes a command. Reserve `When` for the action the scenario verifies.
-  A simple heuristic: if the step's failure would make the scenario's
-  *precondition* unmet, it's `Given`; if its failure is the *thing under
-  test*, it's `When`.
+  when the same check is both precondition and attestation. Never stack
+  `@when` with either.
+- DO make each feature self-contained — no dependency on state another
+  feature leaves behind. If feature B needs state feature A produces, add
+  a `Given` step inside B that ensures it.
+- DO qualify ambiguous nouns in custom step phrasing (`controller`, `node`,
+  `job`). Step definitions are global; terse nouns collide across features.
+- DO treat command-running *preparation* as `Given`, not `When`. A step
+  that runs a command only to prepare state (create pools, register a
+  client, set up a mock device) is `Given`. Reserve `When` for the action
+  under test.
 
 ## DO NOTs
 
@@ -295,17 +278,12 @@ row, or as `Scenario Outline: <title>` with `Examples:` when it does.
       deploy + integrate sequence, extract it into the feature's
       `background` block rather than duplicating it in every scenario. The
       background runs before every scenario in that feature.
-    - **Chained legacy tests.** Legacy `test_*` functions are frequently
-      chained — one deploys, the next scales, the next fails over — with
-      each assuming the prior's side effects. BDD scenarios can be filtered
-      (`-k`), reordered, or run in isolation, which breaks an unbroken chain.
-      For each scenario, enumerate its required starting state (topology,
-      unit counts, statuses, role assignments) and lift it into explicit
-      `Given` preconditions. If a scenario genuinely cannot be decoupled
-      from a sibling (e.g. "scale up while primary is failed" needs both a
-      failed primary *and* three controllers), flag it to the user rather
-      than leaving an implicit dependency or silently dropping the scenario —
-      a combined scenario may be the right answer.
+    - **Chained legacy tests.** Legacy `test_*` functions are often
+      chained (one deploys, the next scales, the next fails over). BDD
+      scenarios can be filtered or run in isolation, which breaks the
+      chain. Lift each scenario's required starting state into explicit
+      `Given` preconditions. If a scenario can't be decoupled, flag it to
+      the user — a combined scenario may be the right answer.
    - **`juju.wait()` calls.** These are assertions, not setup. Map them to
      `Then the workload status for app '...' is 'active'` — do not put
      `juju.wait()` inside a Given/deploy step, because a charm can't reach
@@ -430,10 +408,9 @@ row, or as `Scenario Outline: <title>` with `Examples:` when it does.
   `run_action` step can't pass it correctly — write a custom step that
   calls `juju.run()` with `params={"key": True}` directly instead of
   forcing `True` (uppercase) in the YAML.
-- A scenario can't be expressed without relying on a sibling scenario's
-  side effects, and the precondition can't be re-established by a `Given`
-  step — propose a combined scenario to the user rather than leaving an
-  implicit dependency or silently dropping the case.
+- A scenario can't be decoupled from a sibling's side effects, and the
+  precondition can't be re-established by a `Given` step — propose a
+  combined scenario to the user.
 
 ## Evaluation prompts
 
