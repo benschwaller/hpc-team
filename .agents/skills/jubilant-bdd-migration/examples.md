@@ -36,8 +36,15 @@ def test_deploy_and_check(juju):
 gherkinator init tests/integration/features --name test-plan
 ```
 
-**2. Author the YAML** in `tests/integration/features/test-plan.yaml`
-(`gherkinator edit <path>` opens it in `$EDITOR`):
+**2. Author the YAML** in `tests/integration/features/test-plan.yaml`.
+   Write the YAML directly — do not use `gherkinator edit` (it is an
+   interactive editor for humans, not agents). Then validate in a loop
+   until clean:
+
+   ```bash
+   gherkinator validate tests/integration/features/test-plan.yaml
+   # iterate on the YAML until: "All N test plan(s) are valid."
+   ```
 
 ```yaml
 feature: "Slurmctld deployment"
@@ -541,20 +548,20 @@ scenarios:
   - |-
     Service failover to replica
     Given I record the current role assignments
-    Given the acme service that is primary reports status 'UP'
-    Given the acme service that is replica reports status 'UP'
+    And the acme service that is primary reports status 'UP'
+    And the acme service that is replica reports status 'UP'
     When I stop the acme service on the unit that is primary
     Then the acme service that is replica reports status 'UP'
-    Then the acme service on the unit that is replica is running as primary
+    And the acme service on the unit that is replica is running as primary
   - |-
     Service recovery after restarting primary
     Given I record the current role assignments
-    Given the acme service that is primary reports status 'DOWN'
-    Given the acme service that is replica reports status 'UP'
+    And the acme service that is primary reports status 'DOWN'
+    And the acme service that is replica reports status 'UP'
     When I restart the acme service on the unit that is primary
     Then the acme service that is primary reports status 'UP'
-    Then the acme service on the unit that is primary is running as primary
-    Then the acme service on the unit that is replica is running in background mode
+    And the acme service on the unit that is primary is running as primary
+    And the acme service on the unit that is replica is running in background mode
 ```
 
 ### Custom step shared across feature files
@@ -581,20 +588,69 @@ A charm reaching `active` status means its reconciliation loop has
 completed, but binaries it installs may not be immediately available on
 the unit's `PATH`. When migrating tests that had `sleep(N)` after
 `juju.wait()`, replace the fixed sleep with a `context.wait()` polling
-loop that checks for the binary:
+loop that checks for the binary.
+
+#### Before (traditional pytest + jubilant — from `slurm-charms` `test_oci_runtime.py`)
 
 ```python
-@given("I deploy 'apptainer' from channel 'latest/edge'")
-def deploy_apptainer(context: Context) -> None:
-    juju = context.get_juju()
-    juju.deploy("apptainer", channel="latest/edge")
+def setup_apptainer(juju: jubilant.Juju) -> None:
+    """Deploy and integrate `apptainer` with `slurmctld` and `slurmd`.
+
+    Notes:
+        - Sleep for five seconds after the `apptainer` app reaches active
+          status to give the cluster enough time to reconfigure.
+    """
+    juju.deploy(APPTAINER_APP_NAME, channel="latest/edge")
+    juju.integrate(APPTAINER_APP_NAME, SLURMCTLD_APP_NAME)
+    juju.integrate(APPTAINER_APP_NAME, SLURMD_APP_NAME)
+    juju.wait(lambda status: jubilant.all_active(status, APPTAINER_APP_NAME))
+    sleep(5)  # <-- apptainer binary may not be on PATH yet
 
 
+@pytest.mark.order(13)
+def test_apptainer_oci_scheduling(juju: jubilant.Juju) -> None:
+    """Test that Slurm can schedule jobs using Apptainer."""
+    if APPTAINER_APP_NAME not in juju.status().apps:
+        setup_apptainer(juju)
+
+    sackd_unit = f"{SACKD_APP_NAME}/0"
+    slurmd_unit = f"{SLURMD_APP_NAME}/0"
+
+    juju.exec(
+        "apptainer pull /tmp/jammy.sif docker://ghcr.io/charmed-hpc/ubuntu-test:jammy",
+        unit=slurmd_unit,
+    )
+    result = juju.exec(
+        f"cd /tmp; srun -p {SLURMD_APP_NAME} --container=/tmp/jammy.sif cat /etc/os-release",
+        unit=sackd_unit,
+    ).stdout.strip()
+    # ... assertions on result
+```
+
+#### After (gherkinator-controlled BDD)
+
+The deploy, integrate, and status-wait all map to built-in steps — no
+custom deploy handler. The `sleep(5)` becomes a `context.wait()` poll
+inside the custom `Then` step:
+
+```yaml
+scenarios:
+  - |-
+    Apptainer OCI scheduling
+    Given I deploy 'apptainer' from channel 'latest/edge'
+    And I integrate 'apptainer' with 'slurmctld'
+    And I integrate 'apptainer' with 'slurmd'
+    Then the workload status for app 'apptainer' is 'active'
+    Then an apptainer container job submitted from unit 'sackd/0' runs on unit 'slurmd/0'
+```
+
+```python
 @then(parsers.parse("an apptainer container job submitted from unit '{login_unit}' runs on unit '{compute_unit}'"))
 def apptainer_oci_scheduling(context: Context, login_unit: str, compute_unit: str) -> None:
     """Pull an OCI image and run a Slurm job inside an Apptainer container."""
     juju = context.get_juju()
 
+    # Replace sleep(5) — poll until the apptainer binary is on PATH.
     def apptainer_ready(_ctx: Context) -> bool:
         try:
             juju.exec("apptainer --version", unit=compute_unit)

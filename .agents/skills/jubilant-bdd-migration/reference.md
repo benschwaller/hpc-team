@@ -99,7 +99,7 @@ rejected at generation time.
 
 ### Risk/status filtering for incremental migration
 
-| Filter | Flag | Behaviour |
+| Filter | Flag | Behavior |
 |---|---|---|
 | Risk (cumulative) | `--risk edge\|beta\|candidate\|stable` | `edge` → only `edge`; `beta` → `edge` + `beta`; `candidate` → `edge` + `beta` + `candidate`; `stable` → all. |
 | Status (exact) | `--status planned\|implemented\|deprecated` | Only plans matching the exact value. |
@@ -344,7 +344,10 @@ After migration, confirm (in addition to the DOs/DO NOTs in `SKILL.md`):
 - [ ] `gherkinator generate` produces one `.feature` per `TestPlan` document.
 - [ ] Generated `.feature` files match the YAML source (no hand-edits).
 - [ ] Every original test scenario has a YAML `TestPlan` equivalent.
-- [ ] `LOCAL_*` / charm-path environment variables still work.
+- [ ] `<CHARM_NAME>_CHARM_PATH` environment variables are set (e.g.
+      `SLURMCTLD_CHARM_PATH`); the plugin auto-detects them in the
+      `I pack` and `I deploy a local` step handlers. The legacy `LOCAL_*`
+      convention is superseded — migrate any `LOCAL_*` vars.
 - [ ] `pytest tests/integration/ -v` passes.
 - [ ] Original non-BDD tests are retained until the BDD suite is green.
 
@@ -365,10 +368,14 @@ YAML and custom steps are written, before running the suite.
       tests often assert starting state before an action (e.g. "3
       controllers, all UP" before scaling down). Migrate each to a `Given`
       so the scenario verifies its own starting state.
+<!-- TODO(OO002): re-enable once test-plan-type interop is fleshed out.
+     Requiring each scenario to be self-contained may lead to gigantic
+     scenarios. See PR #52 review.
 - [ ] Scenarios and features are self-contained. Each re-establishes its
       own starting state via `Given` steps — no reliance on a sibling
       scenario's or another feature's side effects. Verify with
       `pytest -k <name>`.
+-->
 - [ ] Multi-app status checks are not narrowed. If the legacy waits on
       `all_active(*APPS)` (multiple apps), the BDD must check each app's
       status — not just the primary. Missing this means an error in a
@@ -410,9 +417,13 @@ YAML and custom steps are written, before running the suite.
       `juju.debug_log()` on test failure, add a equivalent
       `conftest.py` hook (e.g. `pytest_runtest_makereport`) to preserve
       debuggability.
-- [ ] `--keep-models` is honored. If the legacy `juju` fixture consumed
-      `--keep-models`, verify the plugin's `context` fixture or
-      `--juju-bdd-no-teardown` provides equivalent behavior.
+- [ ] Custom test options are replaced. Determine if `pytest-jubilant-bdd`
+      provides any test options that can replace the custom options in
+      these integration tests (e.g. `--keep-models` → `--juju-bdd-no-
+      teardown`). `jubilant` removed many of the custom flags that
+      `pytest-operator` provided, so audit the legacy `conftest.py` for
+      any `--keep-models`, `--model`, `--bundle`, etc. and map each to
+      the plugin equivalent or a new `conftest.py` hook.
 
 ### Polling and timing
 

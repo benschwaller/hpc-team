@@ -72,11 +72,16 @@ structured YAML, validated against a strict schema, and transpiled into
   `node_name(unit)` derive the Slurm node name from the unit in the step
   text. Using the action unit in the `Then` step silently queries the wrong
   node — `context.wait()` catches the exception and polls until timeout.
+<!-- TODO(OO002): re-enable once test-plan-type interop is fleshed out.
+     Requiring each scenario to be self-contained may lead to gigantic
+     scenarios, and the interaction with `Background` blocks and duplicated
+     `Given I deploy` steps needs investigation. See PR #52 review.
 - DO make each scenario **and feature** self-contained. Re-establish
   starting state via explicit `Given` steps; never rely on a sibling
   scenario's or another feature's side effects. BDD scenarios can be
   filtered (`-k`), reordered, or run in isolation. If a scenario can't
   be decoupled, propose a combined scenario to the user.
+-->
 - DO snapshot role→unit mappings into `scenario_state` *before* actions
   that shift which unit holds a role (primary/backup, leader/follower). A
   `Given I record the current role assignments` step captures the mapping;
@@ -304,7 +309,10 @@ row, or as `Scenario Outline: <title>` with `Examples:` when it does.
      content, SMTP capture.
    - **Test ordering (`@pytest.mark.order`).** Not migrated to YAML. Apply
      the marker to the scenario-loading module (`scenarios(...)` line) if
-     cross-file ordering matters.
+     cross-file ordering matters. Note that `pytest-order` is not universally
+     used across the charming ecosystem — only apply it if the target repo
+     already depends on it; otherwise omit and rely on intra-feature
+     top-to-bottom ordering.
 
    Reference the pattern-mapping table in [reference.md](reference.md)
    for the jubilant→BDD translation of each API call, and the migration
@@ -374,21 +382,26 @@ row, or as `Scenario Outline: <title>` with `Examples:` when it does.
 8. **Run the BDD suite** and confirm scenarios pass:
 
    ```bash
-   # Standard. Recipes live in the repo's `justfile`.
-   just integration
+   # Run via the repo's task runner. Examples:
+   just integration          # just
+   make integration          # make
+   tox -e integration        # tox
    # or, if the repo only has a `test` dispatcher:
    just test integration
    ```
 
-   Charm repos standardise on `justfile` recipes (`just unit`,
-   `just integration`, `just fmt`, `just lint`, etc.) as the single
-   entrypoint for everything — they embed preparatory steps like package
-   installation, charm builds, and dependency resolution. Inspect the
-   repo's `justfile` first (`just --show <recipe>` or read it) to find
-   the exact recipe name and any prerequisites it expects. Run the
-   recipe, not `pytest` directly. If the repo does not have a
-   `justfile`, fall back to `pytest tests/integration/ -v` and note the
-   gap.
+   Charm repositories standardize on a task runner (`just`, `make`, or
+   `tox`) as the single entrypoint for everything — recipes embed
+   preparatory steps like package installation, charm builds, and
+   dependency resolution. Inspect the repo's task runner first to find
+   the exact recipe name and any prerequisites it expects:
+
+   - `just`: read the `justfile` (`just --list`, `just --show <recipe>`).
+   - `make`: read the `Makefile` (`make help` if available).
+   - `tox`: read `tox.ini` / `pyproject.toml [tool.tox]` (`tox -av`).
+
+   Run the recipe, not `pytest` directly. If the repo has no task runner,
+   fall back to `pytest tests/integration/ -v` and note the gap.
 
    Fix-and-rerun until green. After the suite is green for a given plan,
    flip the corresponding YAML `status` field from `planned` to
