@@ -9,9 +9,9 @@ settings:
   # GitHub issue state -> Jira status.
   # These must match the status names in your Jira project's workflow.
   status_mapping:
-    opened: "To Do"
+    opened: "Triaged"
     closed: "Done"
-    blocked: "Blocked"
+    blocked: "BLOCKED"
     # Used when a GitHub issue is closed as "not planned"
     not_planned: "Rejected"
 
@@ -22,7 +22,7 @@ settings:
   # GitHub label -> Jira issue type. Issues with no matching label
   # are created as Bugs.
   label_mapping:
-    feature_request: "Task"
+    "feature request": "Story"
     bug: "Task"
 
   # Add a comment on the GitHub issue linking to the created Jira ticket
@@ -39,14 +39,14 @@ settings:
   sync_labels: false
 
   # Uncomment to only sync issues carrying one of these labels:
-  # labels:
-  #   - bug
-  #   - enhancement
+  labels:
+     - "bug"
+     - "feature request"
 
   # Uncomment to attach Jira components (names are case-sensitive):
   # components:
   #   - Slurm
 
   # Uncomment to link all created issues to a parent epic:
-  epic_key: "HPC-1033"
+  # epic_key: "HPC-1033"
 
