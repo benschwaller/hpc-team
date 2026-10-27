@@ -48,5 +48,5 @@ settings:
   #   - Slurm
 
   # Uncomment to link all created issues to a parent epic:
-  # epic_key: "HPC-123"
+  epic_key: "HPC-1033"
 
