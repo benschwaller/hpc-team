@@ -27,7 +27,11 @@ scripts/bulk-ops/bulk-push -s charms -b chore/update-ci \
 ```
 
 Repositories where the patch does not apply cleanly are reported as failures
-and left untouched.
+and left untouched. Pass `--interactive` (`-i`) to instead open a shell in the
+clone when the command fails, so you can resolve conflicts by hand
+(`git apply --3way`, fix markers in your editor, `git add`) and continue with
+the resolved changes; exit the shell with no changes to mark the repository as
+failed.
 
 **Person B** reviews and merges:
 
